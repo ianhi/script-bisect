@@ -256,7 +256,7 @@ class GitBisector:
             
             # Verify the endpoints (unless skipped)
             if not self.skip_verification:
-                console.print("\\n[dim]🔍 Verifying endpoints...[/dim]")
+                console.print("\n[dim]🔍 Verifying endpoints...[/dim]")
                 
                 # Check that good_ref is actually good
                 console.print(f"    Testing {self.good_ref}...")
@@ -282,10 +282,10 @@ class GitBisector:
                 else:
                     console.print(f"    ❌ {self.bad_ref} is bad")
             else:
-                console.print("\\n[dim]⏩ Skipping endpoint verification[/dim]")
+                console.print("\n[dim]⏩ Skipping endpoint verification[/dim]")
             
             # Run binary search
-            console.print("\\n[bold blue]🔄 Starting binary search...[/bold blue]")
+            console.print("\n[bold blue]🔄 Starting binary search...[/bold blue]")
             first_bad_commit = self._binary_search_commits(commits)
             
             if first_bad_commit:
@@ -293,15 +293,15 @@ class GitBisector:
                     "commit_hash": first_bad_commit.hexsha,
                     "author": f"{first_bad_commit.author.name} <{first_bad_commit.author.email}>",
                     "date": first_bad_commit.committed_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                    "message": first_bad_commit.message.strip().split('\\n')[0].strip() if first_bad_commit.message else "No message",
+                    "message": first_bad_commit.message.strip().split('\n')[0].strip() if first_bad_commit.message else "No message",
                 }
                 
-                console.print(f"\\n[green]✨ Found first bad commit: {first_bad_commit.hexsha[:12]}[/green]")
+                console.print(f"\n[green]✨ Found first bad commit: {first_bad_commit.hexsha[:12]}[/green]")
                 console.print(format_commit_info(**commit_info))
                 
                 return commit_info
             else:
-                console.print("\\n[yellow]⚠️ Could not find a clear first bad commit[/yellow]")
+                console.print("\n[yellow]⚠️ Could not find a clear first bad commit[/yellow]")
                 return None
                 
         except Exception as e:
@@ -343,9 +343,9 @@ class GitBisector:
                 # Get just the first line of the commit message and clean it
                 if commit.message:
                     # Get first line and replace any remaining newlines with spaces
-                    subject = commit.message.strip().split('\\n')[0].strip()
+                    subject = commit.message.strip().split('\n')[0].strip()
                     # Replace any remaining newline chars that might be embedded
-                    subject = subject.replace('\\n', ' ').replace('\\r', ' ')
+                    subject = subject.replace('\n', ' ').replace('\r', ' ')
                     # Clean up multiple spaces
                     subject = ' '.join(subject.split())
                 else:
