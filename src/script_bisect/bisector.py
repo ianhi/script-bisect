@@ -1,23 +1,20 @@
-"""Git bisect orchestration for script-bisect."""
+"""Git bisection orchestration for script-bisect using binary search."""
 
 from __future__ import annotations
 
 import logging
-import os
 import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
 import git
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from .exceptions import GitError, RepositoryError
 from .parser import ScriptParser
 from .runner import TestRunner
-from .utils import create_temp_dir, format_commit_info, safe_filename
+from .utils import create_temp_dir, format_commit_info
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +43,7 @@ class BisectResult:
 
 
 class GitBisector:
-    """Orchestrates git bisect operations for PEP 723 scripts."""
+    """Orchestrates git bisection using binary search for PEP 723 scripts."""
     
     def __init__(
         self,
@@ -89,7 +86,7 @@ class GitBisector:
         self.test_runner: TestRunner | None = None
     
     def run(self) -> BisectResult:
-        """Run the complete bisection process.
+        """Run the complete bisection process using binary search.
         
         Returns:
             BisectResult containing the outcome
@@ -99,7 +96,7 @@ class GitBisector:
             RepositoryError: If there's an error with the repository
         """
         try:
-            # Step 1: Clone the repository
+            # Step 1: Clone the repository  
             self._clone_repository()
             
             # Step 2: Validate refs
@@ -108,10 +105,17 @@ class GitBisector:
             # Step 3: Set up test runner
             self._setup_test_runner()
             
-            # Step 4: Run bisection
-            result = self._run_bisection()
+            # Step 4: Run binary search bisection
+            commit_info = self._run_binary_search()
             
-            return result
+            if commit_info:
+                return BisectResult(
+                    found_commit=commit_info["commit_hash"],
+                    commit_info=commit_info,
+                    is_regression=not self.inverse,
+                )
+            else:
+                return BisectResult()
             
         finally:
             self._cleanup()
@@ -189,176 +193,163 @@ class GitBisector:
             test_command=self.test_command,
         )
     
-    def _run_bisection(self) -> BisectResult:
-        """Run the git bisect process."""
-        if not self.repo or not self.test_runner:
-            raise RepositoryError("Bisector not properly initialized")
-        
-        console.print("\\n[bold blue]🔄 Starting bisection...[/bold blue]")
-        
-        try:
-            # Start git bisect
-            self.repo.git.bisect("start")
-            
-            # Mark good and bad commits
-            self.repo.git.bisect("good", self.good_ref)
-            self.repo.git.bisect("bad", self.bad_ref)
-            
-            # Create test script for bisect run
-            test_script_path = self._create_bisect_test_script()
-            
-            # Run git bisect with our test script
-            console.print("Running automated bisection...")
-            
-            try:
-                # Run git bisect run with our test script
-                result = self.repo.git.bisect("run", str(test_script_path))
-                
-                # Parse the result
-                logger.debug(f"Git bisect result: {result}")
-                
-                if "is the first bad commit" in result:
-                    # Extract commit hash from result
-                    lines = result.split('\\n')
-                    commit_line = next((line for line in lines if "is the first bad commit" in line), "")
-                    logger.debug(f"Commit line: {commit_line}")
-                    
-                    if commit_line:
-                        # More robust parsing - look for SHA-like pattern
-                        import re
-                        sha_pattern = r'\\b([a-f0-9]{7,40})\\b'
-                        matches = re.findall(sha_pattern, commit_line)
-                        
-                        if matches:
-                            commit_hash = matches[0]
-                            commit_info = self._get_commit_info(commit_hash)
-                            
-                            console.print(f"\\n[green]✨ Found problematic commit: {commit_hash[:12]}[/green]")
-                            console.print(format_commit_info(**commit_info))
-                        else:
-                            logger.warning(f"Could not extract commit hash from: {commit_line}")
-                            console.print("[yellow]⚠️ Found result but could not parse commit hash[/yellow]")
-                            return BisectResult()
-                        
-                        return BisectResult(
-                            found_commit=commit_hash,
-                            commit_info=commit_info,
-                            is_regression=not self.inverse,
-                        )
-                
-                console.print("[yellow]⚠️ Bisection completed but no clear result[/yellow]")
-                return BisectResult()
-                
-            except git.GitCommandError as e:
-                # Check if bisect is in progress and handle appropriately
-                if "bisect run failed" in str(e):
-                    console.print("[red]❌ Bisection failed - test script issues[/red]")
-                else:
-                    console.print(f"[red]❌ Git bisect error: {e}[/red]")
-                return BisectResult()
-        
-        except Exception as e:
-            raise GitError(f"Bisection failed: {e}") from e
-        
-        finally:
-            # Always reset bisect state
-            try:
-                self.repo.git.bisect("reset")
-            except Exception:
-                pass  # Ignore errors during cleanup
-    
-    def _create_bisect_test_script(self) -> Path:
-        """Create a test script for git bisect run.
-        
-        Returns:
-            Path to the created test script
-        """
-        if not self.repo or not self.test_runner:
-            raise RepositoryError("Bisector not properly initialized")
-        
-        # Create test script content
-        test_script_content = f'''#!/usr/bin/env python3
-"""Test script for git bisect run."""
-
-import sys
-import subprocess
-from pathlib import Path
-
-def main():
-    # Get current commit
-    try:
-        commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], 
-            cwd="{self.repo.working_dir}",
-            text=True
-        ).strip()
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to get current commit: {{e}}")
-        sys.exit(125)  # Skip this commit
-    
-    # Test this commit
-    from script_bisect.runner import TestRunner
-    
-    runner = TestRunner(
-        script_path=Path("{self.script_path}"),
-        package="{self.package}",
-        repo_url="{self.repo_url}",
-        test_command={repr(self.test_command)},
-    )
-    
-    try:
-        success = runner.test_commit(commit)
-        
-        # Return appropriate exit code
-        if {self.inverse}:
-            # Inverse mode: good if test fails, bad if test passes
-            sys.exit(0 if not success else 1)
-        else:
-            # Normal mode: good if test passes, bad if test fails
-            sys.exit(0 if success else 1)
-            
-    except Exception as e:
-        print(f"Test failed with error: {{e}}")
-        sys.exit(125)  # Skip this commit
-
-if __name__ == "__main__":
-    main()
-'''
-        
-        # Write test script
-        test_script_path = self.clone_dir / "bisect_test.py"
-        test_script_path.write_text(test_script_content)
-        test_script_path.chmod(0o755)  # Make executable
-        
-        return test_script_path
-    
-    def _get_commit_info(self, commit_hash: str) -> dict[str, Any]:
-        """Get detailed information about a commit.
-        
-        Args:
-            commit_hash: The commit hash
-            
-        Returns:
-            Dictionary with commit information
-        """
+    def _get_commit_range(self) -> list[git.Commit]:
+        """Get the list of commits between good and bad refs in chronological order."""
         if not self.repo:
-            return {}
+            raise RepositoryError("Repository not initialized")
         
         try:
-            commit = self.repo.commit(commit_hash)
-            return {
-                "commit_hash": commit.hexsha,
-                "author": f"{commit.author.name} <{commit.author.email}>",
-                "date": commit.committed_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                "message": commit.message.split('\\n')[0],  # First line only
-            }
-        except Exception:
-            return {
-                "commit_hash": commit_hash,
-                "author": "Unknown",
-                "date": "Unknown",
-                "message": "Could not retrieve commit information",
-            }
+            # Get the commit range using git rev-list
+            # This gives us commits from good_ref to bad_ref in reverse chronological order
+            commit_shas = self.repo.git.rev_list(
+                f"{self.good_ref}..{self.bad_ref}",
+                "--reverse"  # Get them in chronological order (oldest first)
+            ).strip().split('\n')
+            
+            if not commit_shas or commit_shas == ['']:
+                raise GitError(f"No commits found between {self.good_ref} and {self.bad_ref}")
+            
+            # Convert SHAs to commit objects
+            commits = [self.repo.commit(sha) for sha in commit_shas]
+            
+            logger.info(f"Found {len(commits)} commits to bisect")
+            return commits
+            
+        except git.GitCommandError as e:
+            raise GitError(f"Failed to get commit range: {e}") from e
+    
+    def _test_commit(self, commit: git.Commit) -> bool | None:
+        """Test a specific commit.
+        
+        Returns:
+            True if test passes (good), False if test fails (bad), None if untestable
+        """
+        if not self.test_runner:
+            raise RepositoryError("Test runner not initialized")
+        
+        try:
+            success = self.test_runner.test_commit(commit.hexsha)
+            
+            # Handle inverse mode
+            if self.inverse:
+                return not success
+            return success
+            
+        except Exception as e:
+            logger.warning(f"Error testing commit {commit.hexsha[:12]}: {e}")
+            return None  # Untestable
+    
+    def _run_binary_search(self) -> dict[str, Any] | None:
+        """Run binary search bisection to find the first bad commit."""
+        try:
+            # Get the commit range
+            commits = self._get_commit_range()
+            
+            if not commits:
+                console.print("[yellow]⚠️ No commits found in range[/yellow]")
+                return None
+            
+            console.print(f"[dim]Found {len(commits)} commits between {self.good_ref} and {self.bad_ref}[/dim]")
+            
+            # Verify the endpoints
+            console.print("\\n[dim]🔍 Verifying endpoints...[/dim]")
+            
+            # Check that good_ref is actually good
+            good_commit = self.repo.commit(self.good_ref)
+            good_result = self._test_commit(good_commit)
+            if good_result is False:
+                console.print(f"[red]❌ Good ref '{self.good_ref}' is not actually good![/red]")
+                return None
+            console.print(f"    ✅ {self.good_ref} is good")
+            
+            # Check that bad_ref is actually bad  
+            bad_commit = self.repo.commit(self.bad_ref)
+            bad_result = self._test_commit(bad_commit)
+            if bad_result is True:
+                console.print(f"[red]❌ Bad ref '{self.bad_ref}' is not actually bad![/red]")
+                return None
+            console.print(f"    ❌ {self.bad_ref} is bad")
+            
+            # Run binary search
+            console.print("\\n[bold blue]🔄 Starting binary search...[/bold blue]")
+            first_bad_commit = self._binary_search_commits(commits)
+            
+            if first_bad_commit:
+                commit_info = {
+                    "commit_hash": first_bad_commit.hexsha,
+                    "author": f"{first_bad_commit.author.name} <{first_bad_commit.author.email}>",
+                    "date": first_bad_commit.committed_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                    "message": first_bad_commit.message.split('\\n')[0],
+                }
+                
+                console.print(f"\\n[green]✨ Found first bad commit: {first_bad_commit.hexsha[:12]}[/green]")
+                console.print(format_commit_info(**commit_info))
+                
+                return commit_info
+            else:
+                console.print("\\n[yellow]⚠️ Could not find a clear first bad commit[/yellow]")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Bisection failed: {e}")
+            raise GitError(f"Bisection failed: {e}") from e
+    
+    def _binary_search_commits(self, commits: list[git.Commit]) -> git.Commit | None:
+        """Perform binary search on commits to find the first bad commit."""
+        left = 0
+        right = len(commits) - 1
+        first_bad = None
+        
+        steps = 0
+        total_steps = len(commits).bit_length()  # Approximate number of steps needed
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(
+                f"Bisecting {len(commits)} commits...", 
+                total=total_steps
+            )
+            
+            while left <= right:
+                steps += 1
+                mid = (left + right) // 2
+                commit = commits[mid]
+                
+                progress.update(
+                    task, 
+                    description=f"Step {steps}/{total_steps}: Testing commit {commit.hexsha[:12]}",
+                    advance=1
+                )
+                
+                console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({commit.message.split()[0] if commit.message else 'No message'})")
+                
+                result = self._test_commit(commit)
+                
+                if result is None:
+                    # Untestable commit, skip it
+                    console.print(f"    ⚠️  Skipping untestable commit")
+                    # Remove this commit and continue
+                    commits.pop(mid)
+                    if mid <= (left + right) // 2:
+                        right -= 1
+                    continue
+                
+                if result:  # Good commit
+                    console.print(f"    ✅ Good")
+                    left = mid + 1
+                else:  # Bad commit
+                    console.print(f"    ❌ Bad")
+                    first_bad = commit
+                    right = mid - 1
+            
+            progress.update(task, description="✨ Bisection complete!", completed=total_steps)
+        
+        return first_bad
     
     def _cleanup(self) -> None:
         """Clean up resources after bisection."""
