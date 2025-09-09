@@ -117,13 +117,13 @@ class GitBisector:
             self._cleanup()
     
     def _clone_repository(self) -> None:
-        """Clone the repository for bisection."""
+        """Clone the repository for bisection with optimized history fetching."""
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task("Cloning repository...", total=None)
+            task = progress.add_task("Cloning repository (shallow)...", total=None)
             
             try:
                 # Clean the URL for git clone
@@ -131,10 +131,35 @@ class GitBisector:
                 if clone_url.startswith("git+"):
                     clone_url = clone_url[4:]  # Remove git+ prefix
                 
-                logger.info(f"Cloning {clone_url} to {self.clone_dir}")
-                self.repo = git.Repo.clone_from(clone_url, self.clone_dir)
+                logger.info(f"Shallow cloning {clone_url} to {self.clone_dir}")
                 
-                progress.update(task, description="✅ Repository cloned")
+                # First do a shallow clone to minimize initial download
+                self.repo = git.Repo.clone_from(
+                    clone_url, 
+                    self.clone_dir,
+                    depth=1
+                )
+                
+                progress.update(task, description="Fetching history for bisection...")
+                
+                # Now fetch the specific refs we need for bisection
+                # This fetches only the commits between good and bad refs
+                try:
+                    self.repo.git.fetch("origin", f"{self.good_ref}:{self.good_ref}", "--depth=50")
+                except git.GitCommandError:
+                    # Ref might already exist or be a commit hash, try fetching more broadly
+                    self.repo.git.fetch("origin", self.good_ref, "--depth=50")
+                
+                try:
+                    self.repo.git.fetch("origin", f"{self.bad_ref}:{self.bad_ref}", "--depth=50")
+                except git.GitCommandError:
+                    self.repo.git.fetch("origin", self.bad_ref, "--depth=50")
+                
+                # Unshallow the repository to allow bisection
+                progress.update(task, description="Preparing for bisection...")
+                self.repo.git.fetch("--unshallow")
+                
+                progress.update(task, description="✅ Repository ready for bisection")
                 
             except Exception as e:
                 raise RepositoryError(f"Failed to clone repository: {e}") from e
@@ -190,16 +215,30 @@ class GitBisector:
                 result = self.repo.git.bisect("run", str(test_script_path))
                 
                 # Parse the result
+                logger.debug(f"Git bisect result: {result}")
+                
                 if "is the first bad commit" in result:
                     # Extract commit hash from result
                     lines = result.split('\\n')
                     commit_line = next((line for line in lines if "is the first bad commit" in line), "")
+                    logger.debug(f"Commit line: {commit_line}")
+                    
                     if commit_line:
-                        commit_hash = commit_line.split()[0]
-                        commit_info = self._get_commit_info(commit_hash)
+                        # More robust parsing - look for SHA-like pattern
+                        import re
+                        sha_pattern = r'\\b([a-f0-9]{7,40})\\b'
+                        matches = re.findall(sha_pattern, commit_line)
                         
-                        console.print(f"\\n[green]✨ Found problematic commit: {commit_hash[:12]}[/green]")
-                        console.print(format_commit_info(**commit_info))
+                        if matches:
+                            commit_hash = matches[0]
+                            commit_info = self._get_commit_info(commit_hash)
+                            
+                            console.print(f"\\n[green]✨ Found problematic commit: {commit_hash[:12]}[/green]")
+                            console.print(format_commit_info(**commit_info))
+                        else:
+                            logger.warning(f"Could not extract commit hash from: {commit_line}")
+                            console.print("[yellow]⚠️ Found result but could not parse commit hash[/yellow]")
+                            return BisectResult()
                         
                         return BisectResult(
                             found_commit=commit_hash,
@@ -314,7 +353,12 @@ if __name__ == "__main__":
                 "message": commit.message.split('\\n')[0],  # First line only
             }
         except Exception:
-            return {"commit_hash": commit_hash}
+            return {
+                "commit_hash": commit_hash,
+                "author": "Unknown",
+                "date": "Unknown",
+                "message": "Could not retrieve commit information",
+            }
     
     def _cleanup(self) -> None:
         """Clean up resources after bisection."""

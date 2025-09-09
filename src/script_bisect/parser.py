@@ -7,7 +7,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import tomli
+try:
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib  # type: ignore
+except ImportError:
+    import tomli as tomllib  # type: ignore
+
 import tomli_w
 
 from .exceptions import ParseError
@@ -84,11 +91,7 @@ class ScriptParser:
         toml_string = '\n'.join(toml_content)
         
         try:
-            if sys.version_info >= (3, 11):
-                import tomllib
-                return tomllib.loads(toml_string)
-            else:
-                return tomli.loads(toml_string)
+            return tomllib.loads(toml_string)
         except Exception as e:
             raise ParseError(f"Invalid TOML in metadata: {e}") from e
     
