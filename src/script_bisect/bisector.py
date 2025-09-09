@@ -293,7 +293,7 @@ class GitBisector:
                     "commit_hash": first_bad_commit.hexsha,
                     "author": f"{first_bad_commit.author.name} <{first_bad_commit.author.email}>",
                     "date": first_bad_commit.committed_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                    "message": first_bad_commit.message.strip().split('\\n')[0] if first_bad_commit.message else "No message",
+                    "message": first_bad_commit.message.strip().split('\\n')[0].strip() if first_bad_commit.message else "No message",
                 }
                 
                 console.print(f"\\n[green]✨ Found first bad commit: {first_bad_commit.hexsha[:12]}[/green]")
@@ -340,8 +340,12 @@ class GitBisector:
                     advance=1
                 )
                 
-                # Get just the commit subject line (first non-empty line)
-                subject = commit.message.strip().split('\\n')[0] if commit.message else 'No message'
+                # Get just the first line of the commit message, truncate if too long
+                if commit.message:
+                    first_line = commit.message.strip().split('\\n')[0].strip()
+                    subject = first_line[:80] + '...' if len(first_line) > 80 else first_line
+                else:
+                    subject = 'No message'
                 console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({subject})")
                 
                 result = self._test_commit(commit)

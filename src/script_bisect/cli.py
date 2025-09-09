@@ -99,9 +99,9 @@ def print_summary_table(
     help="Show what would be done without actually doing it",
 )
 @click.option(
-    "--skip-verification",
+    "--verify-endpoints",
     is_flag=True,
-    help="Skip endpoint verification for faster startup",
+    help="Enable endpoint verification (slower but safer)",
 )
 @click.version_option(version=__version__)
 def main(
@@ -116,7 +116,7 @@ def main(
     inverse: bool = False,
     verbose: bool = False,
     dry_run: bool = False,
-    skip_verification: bool = False,
+    verify_endpoints: bool = False,
 ) -> None:
     """Bisect package versions in PEP 723 Python scripts.
     
@@ -188,7 +188,7 @@ def main(
             clone_dir=clone_dir,
             keep_clone=keep_clone,
             inverse=inverse,
-            skip_verification=skip_verification,
+            skip_verification=not verify_endpoints,
         )
         
         result = bisector.run()
