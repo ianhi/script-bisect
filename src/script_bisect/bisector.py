@@ -340,10 +340,9 @@ class GitBisector:
                     advance=1
                 )
                 
-                # Get just the first line of the commit message, truncate if too long
+                # Get just the first line of the commit message
                 if commit.message:
-                    first_line = commit.message.strip().split('\\n')[0].strip()
-                    subject = first_line[:80] + '...' if len(first_line) > 80 else first_line
+                    subject = commit.message.strip().split('\\n')[0].strip()
                 else:
                     subject = 'No message'
                 console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({subject})")
