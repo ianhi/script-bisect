@@ -177,11 +177,6 @@ def main(
             console.print("[yellow]🏃 Dry run mode - no actual bisection will be performed[/yellow]")
             return
         
-        # Confirm before proceeding
-        if not click.confirm("\nProceed with bisection?", default=True):
-            console.print("[yellow]❌ Bisection cancelled[/yellow]")
-            return
-        
         # Create and run the bisector
         bisector = GitBisector(
             script_path=script,
