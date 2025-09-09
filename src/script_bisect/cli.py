@@ -13,6 +13,12 @@ from rich.table import Table
 from . import __version__
 from .bisector import GitBisector
 from .exceptions import ScriptBisectError
+from .interactive import (
+    confirm_bisection_params,
+    prompt_for_package,
+    prompt_for_refs,
+    prompt_for_repo_url,
+)
 from .parser import ScriptParser
 from .utils import setup_logging
 
@@ -56,9 +62,9 @@ def print_summary_table(
     type=click.Path(exists=True, path_type=Path),
     metavar="SCRIPT",
 )
-@click.argument("package", metavar="PACKAGE")
-@click.argument("good_ref", metavar="GOOD_REF")
-@click.argument("bad_ref", metavar="BAD_REF")
+@click.argument("package", metavar="PACKAGE", required=False)
+@click.argument("good_ref", metavar="GOOD_REF", required=False)
+@click.argument("bad_ref", metavar="BAD_REF", required=False)
 @click.option(
     "--repo-url",
     help="Override the repository URL (auto-detected if not provided)",
@@ -104,9 +110,9 @@ def print_summary_table(
 @click.version_option(version=__version__)
 def main(
     script: Path,
-    package: str,
-    good_ref: str,
-    bad_ref: str,
+    package: str | None = None,
+    good_ref: str | None = None,
+    bad_ref: str | None = None,
     repo_url: str | None = None,
     test_command: str | None = None,
     clone_dir: Path | None = None,
@@ -149,7 +155,11 @@ def main(
         console.print("[dim]📄 Parsing script metadata...[/dim]")
         parser = ScriptParser(script)
 
-        if not parser.has_package(package):
+        # Interactive package selection if not provided
+        if not package:
+            available = parser.get_available_packages()
+            package = prompt_for_package(available)
+        elif not parser.has_package(package):
             console.print(
                 f"[red]❌ Package '{package}' not found in script dependencies[/red]"
             )
@@ -165,15 +175,24 @@ def main(
             console.print("[dim]🔍 Auto-detecting repository URL...[/dim]")
             repo_url = parser.get_repository_url(package)
             if not repo_url:
-                console.print(
-                    f"[red]❌ Could not auto-detect repository URL for '{package}'[/red]"
-                    "\n[yellow]Please specify --repo-url manually[/yellow]"
-                )
-                sys.exit(1)
+                repo_url = prompt_for_repo_url(package)
 
-        print_summary_table(script, package, repo_url, good_ref, bad_ref)
+        # Interactive prompts for missing git refs
+        if not good_ref or not bad_ref:
+            good_ref, bad_ref = prompt_for_refs(package, repo_url, good_ref, bad_ref)
+
+        # Validate and potentially swap refs if they're in wrong order
+        good_ref, bad_ref = _validate_and_fix_refs(good_ref, bad_ref, inverse)
+
+        # Show confirmation unless all parameters were provided via command line
+        if not all([package, good_ref, bad_ref]) and not confirm_bisection_params(
+            script, package, good_ref, bad_ref, repo_url, test_command, inverse
+        ):
+            console.print("[yellow]⚠️ Bisection cancelled[/yellow]")
+            return
 
         if dry_run:
+            print_summary_table(script, package, repo_url, good_ref, bad_ref)
             console.print(
                 "[yellow]🏃 Dry run mode - no actual bisection will be performed[/yellow]"
             )
@@ -216,6 +235,93 @@ def main(
         if verbose:
             console.print_exception()
         sys.exit(1)
+
+
+def _validate_and_fix_refs(
+    good_ref: str, bad_ref: str, inverse: bool
+) -> tuple[str, str]:
+    """Validate git references and potentially swap them if needed.
+
+    This function helps handle edge cases where users accidentally:
+    - Swap good/bad refs
+    - Provide the same ref for both
+    - Use obviously wrong chronological order
+
+    Args:
+        good_ref: The "good" reference provided by user
+        bad_ref: The "bad" reference provided by user
+        inverse: Whether this is inverse mode (finding when something was fixed)
+
+    Returns:
+        Tuple of (validated_good_ref, validated_bad_ref)
+    """
+    # Check for same refs
+    if good_ref == bad_ref:
+        console.print("[red]❌ Good and bad references cannot be the same[/red]")
+        console.print(f"Both refs are: {good_ref}")
+        console.print("[yellow]Please provide different git references[/yellow]")
+        sys.exit(1)
+
+    # Check for obvious version tag patterns that might be swapped
+    if _looks_like_newer_version(good_ref, bad_ref) and not inverse:
+        console.print("[yellow]⚠️ Potential reference order issue detected[/yellow]")
+        console.print(f"[green]Good ref: {good_ref}[/green] (appears newer)")
+        console.print(f"[red]Bad ref: {bad_ref}[/red] (appears older)")
+        console.print()
+        console.print(
+            "Typically, the '[green]good[/green]' ref should be an older working version,"
+        )
+        console.print("and the '[red]bad[/red]' ref should be a newer broken version.")
+        console.print()
+
+        from rich.prompt import Confirm
+
+        try:
+            if Confirm.ask("[bold]Swap the references?[/bold]", default=True):
+                good_ref, bad_ref = bad_ref, good_ref
+                console.print("[green]✅ References swapped[/green]")
+        except KeyboardInterrupt:
+            console.print("\n[yellow]⚠️ Keeping original order[/yellow]")
+
+    return good_ref, bad_ref
+
+
+def _looks_like_newer_version(ref1: str, ref2: str) -> bool:
+    """Check if ref1 looks like a newer version than ref2.
+
+    This is a heuristic for common version patterns like:
+    - v1.2.0 vs v2.0.0
+    - 2024.01.0 vs 2024.12.0
+    - 1.0 vs 2.0
+
+    Args:
+        ref1: First reference
+        ref2: Second reference
+
+    Returns:
+        True if ref1 appears to be a newer version than ref2
+    """
+    import re
+
+    # Extract version-like patterns
+    version_pattern = r"v?(\d+(?:\.\d+)*(?:\.\d+)*)"
+
+    match1 = re.search(version_pattern, ref1)
+    match2 = re.search(version_pattern, ref2)
+
+    if not (match1 and match2):
+        return False
+
+    def version_tuple(version_str: str) -> tuple[int, ...]:
+        """Convert version string to tuple for comparison."""
+        return tuple(map(int, version_str.split(".")))
+
+    try:
+        v1 = version_tuple(match1.group(1))
+        v2 = version_tuple(match2.group(1))
+        return v1 > v2
+    except (ValueError, AttributeError):
+        return False
 
 
 if __name__ == "__main__":
