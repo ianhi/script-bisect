@@ -10,7 +10,7 @@ Bisect package versions in PEP 723 Python scripts using git bisect and uv.
 `script-bisect` combines the power of git bisect with PEP 723 inline script metadata to automatically find the commit that introduced a regression in a Python package dependency. It works by:
 
 1. 📄 **Parsing** your PEP 723 script to extract dependency information
-2. 📥 **Cloning** the package repository automatically  
+2. 📥 **Cloning** the package repository automatically
 3. 🔄 **Running** git bisect with intelligent test automation
 4. ✏️ **Updating** package references for each commit tested
 5. 🎯 **Finding** the exact commit that caused the issue
@@ -106,7 +106,7 @@ script-bisect SCRIPT PACKAGE GOOD_REF BAD_REF
 ```
 
 - **SCRIPT**: Path to your PEP 723 Python script
-- **PACKAGE**: Name of the package to bisect  
+- **PACKAGE**: Name of the package to bisect
 - **GOOD_REF**: Git reference (tag/commit/branch) where it works
 - **BAD_REF**: Git reference where it's broken
 
@@ -188,14 +188,14 @@ The tool will automatically convert PyPI package specs to git dependencies durin
 - Validates package dependencies and requirements
 - Auto-detects repository URLs for PyPI packages
 
-### 2. Repository Management  
+### 2. Repository Management
 - Clones the package repository to a temporary directory
 - Validates that good/bad references exist
 - Manages cleanup automatically (unless `--keep-clone` is used)
 
 ### 3. Bisection Process
 - Uses `git bisect run` with an automated test script
-- For each commit, updates your script's dependency reference  
+- For each commit, updates your script's dependency reference
 - Runs `uv run script.py` to test the specific commit
 - Returns appropriate exit codes for git bisect (0=good, 1=bad, 125=skip)
 
@@ -212,7 +212,7 @@ The tool will automatically convert PyPI package specs to git dependencies durin
 - Ensure the package name matches exactly what's in your dependencies list
 - Use `--verbose` to see available packages
 
-**"Could not auto-detect repository URL"**  
+**"Could not auto-detect repository URL"**
 - Use `--repo-url` to specify the repository manually
 - Ensure the package has repository metadata on PyPI
 
