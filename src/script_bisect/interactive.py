@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
     from prompt_toolkit.document import Document
 
+    from .issue_importer import CodeBlock
+
 console = Console()
 
 
@@ -544,3 +546,324 @@ def _prompt_with_completion(prompt_text: str, choices: list[str]) -> str:
     except (EOFError, KeyboardInterrupt):
         console.print("\n[yellow]⚠️ Cancelled by user[/yellow]")
         raise SystemExit(130)
+
+
+def prompt_for_code_block(code_blocks: list[CodeBlock]) -> CodeBlock:
+    """Prompt user to select a code block from the extracted blocks.
+
+    Args:
+        code_blocks: List of CodeBlock objects to choose from
+
+    Returns:
+        Selected CodeBlock
+
+    Raises:
+        SystemExit: If cancelled by user or no valid selection made
+    """
+    if not code_blocks:
+        console.print("[red]❌ No code blocks found[/red]")
+        raise SystemExit(1)
+
+    if len(code_blocks) == 1:
+        block = code_blocks[0]
+        console.print(
+            f"[green]📄 Using only code block found in {block.source_location}[/green]"
+        )
+        return block
+
+    console.print("\n[bold blue]📄 Select Code Block[/bold blue]")
+    console.print(
+        "Found multiple code blocks. Please select the one to use as your test script:"
+    )
+    console.print()
+
+    # Create a table showing the code blocks with larger preview
+    table = Table(title="Available Code Blocks", show_header=True)
+    table.add_column("Index", style="cyan", width=8)
+    table.add_column("Source", style="dim", width=20)
+    table.add_column("Language", style="yellow", width=12)
+    table.add_column("Confidence", style="green", width=12)
+    table.add_column("Lines", style="blue", width=8)
+    table.add_column("Preview", style="white", width=80)  # Much larger preview
+
+    for i, block in enumerate(code_blocks, 1):
+        # Calculate line count
+        line_count = len([line for line in block.content.split("\n") if line.strip()])
+
+        # Create a larger, more detailed preview with syntax highlighting
+        lines = block.content.split("\n")
+        preview_lines = []
+
+        # Show first 6 lines instead of 3, and longer lines
+        shown_lines = 0
+        for line in lines:
+            if line.strip():
+                # Show more characters per line (75 instead of 40)
+                display_line = line.strip()[:75] + (
+                    "..." if len(line.strip()) > 75 else ""
+                )
+                preview_lines.append(display_line)
+                shown_lines += 1
+                if shown_lines >= 6:  # Show up to 6 lines
+                    break
+
+        if len([line for line in lines if line.strip()]) > 6:
+            preview_lines.append("...")
+
+        preview_content = "\n".join(preview_lines) if preview_lines else "(empty)"
+
+        # Apply basic syntax coloring if it's Python code
+        if block.language == "python" and preview_lines:
+            # Add basic Python syntax coloring using rich markup
+            colored_preview = _add_python_colors(preview_content)
+            preview = colored_preview
+        else:
+            preview = preview_content
+
+        # Format confidence score with more detail
+        confidence_str = f"{block.confidence_score:.2f}"
+        if block.is_python_script:
+            confidence_str = f"[bold green]{confidence_str} ✓[/bold green]"
+        elif block.confidence_score > 0.3:
+            confidence_str = f"[yellow]{confidence_str} ~[/yellow]"
+        else:
+            confidence_str = f"[dim]{confidence_str}[/dim]"
+
+        # Add visual separator between high and low confidence
+        row_style = "bold" if block.is_python_script else "dim"
+
+        table.add_row(
+            f"[bold]{str(i)}[/bold]" if block.is_python_script else str(i),
+            block.source_location,
+            f"[bold]{block.language or 'unknown'}[/bold]"
+            if block.language == "python"
+            else (block.language or "unknown"),
+            confidence_str,
+            f"[bold]{str(line_count)}[/bold]" if line_count > 5 else str(line_count),
+            f"[{row_style}]{preview}[/{row_style}]",
+        )
+
+    console.print(table)
+
+    # Add a helpful legend
+    console.print("[dim]Legend:[/dim]")
+    console.print("  [bold green]✓[/bold green] = High confidence Python script")
+    console.print("  [yellow]~[/yellow] = Medium confidence")
+    console.print("  [dim]Low confidence or non-Python[/dim]")
+    console.print()
+
+    # Show detailed content for likely scripts
+    likely_scripts = [block for block in code_blocks if block.is_python_script]
+    if likely_scripts and len(likely_scripts) <= 3:
+        console.print("[bold]🐍 Likely Python scripts (showing full content):[/bold]")
+        for i, block in enumerate(code_blocks):
+            if block.is_python_script:
+                from rich.panel import Panel
+                from rich.syntax import Syntax
+
+                console.print(
+                    f"\n[bold cyan]📄 Block {i+1} from {block.source_location}[/bold cyan]"
+                )
+
+                # Create syntax highlighted code
+                try:
+                    syntax = Syntax(
+                        block.content,
+                        "python",
+                        theme="monokai",
+                        line_numbers=True,
+                        word_wrap=True,
+                        background_color="default",
+                    )
+                    panel = Panel(
+                        syntax,
+                        title=f"[bold]{block.language or 'python'}[/bold]",
+                        title_align="left",
+                        expand=False,
+                        border_style="blue",
+                    )
+                    console.print(panel)
+                except Exception:
+                    # Fallback to plain text if syntax highlighting fails
+                    console.print(f"[dim]```{block.language or 'python'}[/dim]")
+                    console.print(block.content)
+                    console.print("[dim]```[/dim]")
+
+                console.print()  # Add spacing between blocks
+
+    while True:
+        try:
+            choice = Prompt.ask(
+                "\n[bold cyan]Select code block (number or 'show N' to see full content)[/bold cyan]",
+                default="1",
+            )
+
+            # Handle 'show N' command to display full content
+            if choice.lower().startswith("show "):
+                try:
+                    show_index = int(choice.split()[1]) - 1
+                    if 0 <= show_index < len(code_blocks):
+                        block = code_blocks[show_index]
+                        from rich.panel import Panel
+                        from rich.syntax import Syntax
+
+                        console.print(
+                            f"\n[bold cyan]📄 Full content of block {show_index + 1} from {block.source_location}[/bold cyan]"
+                        )
+                        console.print(
+                            f"[dim]Language: {block.language or 'unknown'}[/dim]"
+                        )
+                        console.print(
+                            f"[dim]Confidence: {block.confidence_score:.1f}[/dim]"
+                        )
+                        console.print(
+                            f"[dim]Lines: {len([line for line in block.content.split('\n') if line.strip()])}[/dim]"
+                        )
+
+                        # Create syntax highlighted code
+                        try:
+                            syntax = Syntax(
+                                block.content,
+                                block.language or "python",
+                                theme="monokai",
+                                line_numbers=True,
+                                word_wrap=True,
+                                background_color="default",
+                            )
+                            panel = Panel(
+                                syntax,
+                                title=f"[bold]{block.language or 'python'}[/bold] - Block {show_index + 1}",
+                                title_align="left",
+                                expand=False,
+                                border_style="green"
+                                if block.is_python_script
+                                else "yellow",
+                            )
+                            console.print(panel)
+                        except Exception:
+                            # Fallback to plain text if syntax highlighting fails
+                            console.print(f"[dim]```{block.language or 'text'}[/dim]")
+                            console.print(block.content)
+                            console.print("[dim]```[/dim]")
+                        continue
+                    else:
+                        console.print(
+                            f"[red]Invalid block number: {show_index + 1}[/red]"
+                        )
+                        continue
+                except (ValueError, IndexError):
+                    console.print(
+                        "[red]Invalid format. Use 'show N' where N is the block number.[/red]"
+                    )
+                    continue
+
+            # Handle numeric choice
+            if choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(code_blocks):
+                    selected_block = code_blocks[index]
+                    console.print(
+                        f"\n[green]✅ Selected block {index + 1} from {selected_block.source_location}[/green]"
+                    )
+
+                    # Show confirmation with preview
+                    console.print(
+                        f"[dim]Language: {selected_block.language or 'unknown'}[/dim]"
+                    )
+                    console.print(
+                        f"[dim]Confidence: {selected_block.confidence_score:.1f}[/dim]"
+                    )
+                    console.print(
+                        f"[dim]Lines: {len([line for line in selected_block.content.split('\n') if line.strip()])}[/dim]"
+                    )
+
+                    # Ask for confirmation
+                    if Confirm.ask("Use this code block?", default=True):
+                        return selected_block
+                    else:
+                        continue
+
+            console.print(
+                f"[red]Invalid choice. Please enter a number from 1 to {len(code_blocks)} or 'show N'.[/red]"
+            )
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]⚠️ Cancelled by user[/yellow]")
+            raise SystemExit(130)
+
+
+def _add_python_colors(code: str) -> str:
+    """Add basic Python syntax coloring using rich markup.
+
+    Args:
+        code: Python code string
+
+    Returns:
+        Code with rich color markup
+    """
+    import re
+
+    # Python keywords to highlight
+    keywords = [
+        "and",
+        "as",
+        "assert",
+        "break",
+        "class",
+        "continue",
+        "def",
+        "del",
+        "elif",
+        "else",
+        "except",
+        "finally",
+        "for",
+        "from",
+        "global",
+        "if",
+        "import",
+        "in",
+        "is",
+        "lambda",
+        "not",
+        "or",
+        "pass",
+        "raise",
+        "return",
+        "try",
+        "while",
+        "with",
+        "yield",
+        "True",
+        "False",
+        "None",
+    ]
+
+    # Start with the original code
+    colored_code = code
+
+    # Color keywords (but avoid partial matches)
+    for keyword in keywords:
+        pattern = r"\b" + re.escape(keyword) + r"\b"
+        colored_code = re.sub(
+            pattern, f"[bold magenta]{keyword}[/bold magenta]", colored_code
+        )
+
+    # Color strings (simple approach for single and double quotes)
+    colored_code = re.sub(
+        r'"([^"]*)"', r'[green]"[cyan]\1[/cyan]"[/green]', colored_code
+    )
+    colored_code = re.sub(
+        r"'([^']*)'", r"[green]'[cyan]\1[/cyan]'[/green]", colored_code
+    )
+
+    # Color comments
+    colored_code = re.sub(r"(#.*)", r"[dim]\1[/dim]", colored_code)
+
+    # Color common function calls
+    colored_code = re.sub(r"\b(\w+)(\()", r"[bold blue]\1[/bold blue]\2", colored_code)
+
+    # Color numbers
+    colored_code = re.sub(r"\b(\d+\.?\d*)\b", r"[yellow]\1[/yellow]", colored_code)
+
+    return colored_code

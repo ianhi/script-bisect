@@ -40,6 +40,8 @@ dependencies = [
     "packaging>=23.0",
     "tomli-w>=1.0",
     "prompt-toolkit>=3.0.52",
+    "requests>=2.32.5",
+    "mistune>=3.1.4",
 ]
 
 [project.optional-dependencies]

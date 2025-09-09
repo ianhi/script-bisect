@@ -8,18 +8,23 @@ from pathlib import Path
 import click
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Confirm
 from rich.table import Table
 
 from . import __version__
 from .bisector import GitBisector
+from .editor_integration import EditorIntegration
 from .exceptions import ScriptBisectError
 from .interactive import (
     confirm_bisection_params,
+    prompt_for_code_block,
     prompt_for_package,
     prompt_for_refs,
     prompt_for_repo_url,
 )
+from .issue_importer import GitHubIssueImporter
 from .parser import ScriptParser
+from .script_generator import ScriptGenerator
 from .utils import setup_logging
 
 console = Console()
@@ -57,11 +62,7 @@ def print_summary_table(
 
 
 @click.command()
-@click.argument(
-    "script",
-    type=click.Path(exists=True, path_type=Path),
-    metavar="SCRIPT",
-)
+@click.argument("source", metavar="SOURCE")
 @click.argument("package", metavar="PACKAGE", required=False)
 @click.argument("good_ref", metavar="GOOD_REF", required=False)
 @click.argument("bad_ref", metavar="BAD_REF", required=False)
@@ -92,12 +93,6 @@ def print_summary_table(
     help="Find when something was fixed (not broken)",
 )
 @click.option(
-    "--verbose",
-    "-v",
-    is_flag=True,
-    help="Enable verbose output",
-)
-@click.option(
     "--dry-run",
     is_flag=True,
     help="Show what would be done without actually doing it",
@@ -107,9 +102,25 @@ def print_summary_table(
     is_flag=True,
     help="Enable endpoint verification (slower but safer)",
 )
+@click.option(
+    "--no-edit",
+    is_flag=True,
+    help="Skip script editing step (for GitHub URLs)",
+)
+@click.option(
+    "--keep-script",
+    is_flag=True,
+    help="Keep the generated script file after bisection (for GitHub URLs)",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose output",
+)
 @click.version_option(version=__version__)
 def main(
-    script: Path,
+    source: str,
     package: str | None = None,
     good_ref: str | None = None,
     bad_ref: str | None = None,
@@ -118,109 +129,86 @@ def main(
     clone_dir: Path | None = None,
     keep_clone: bool = False,
     inverse: bool = False,
-    verbose: bool = False,
     dry_run: bool = False,
     verify_endpoints: bool = False,
+    no_edit: bool = False,
+    keep_script: bool = False,
+    verbose: bool = False,
 ) -> None:
     """Bisect package versions in PEP 723 Python scripts.
 
-    This tool uses git bisect to find the commit that introduced a regression
-    in a Python package dependency. It works by:
+    SOURCE can be either:
+    - A GitHub issue/comment URL (e.g., https://github.com/user/repo/issues/123)
+    - A local Python script file with PEP 723 metadata
 
-    1. Parsing the PEP 723 metadata in your script
-    2. Cloning the package repository
-    3. Running git bisect with automatic testing
-    4. Updating the package reference for each commit tested
+    The tool automatically detects the input type and:
+
+    For GitHub URLs:
+    1. Fetches and extracts code blocks from the issue/comments
+    2. Prompts you to select the correct script
+    3. Auto-generates PEP 723 metadata with dependencies
+    4. Optionally allows editing before bisection
+    5. Runs the bisection process
+
+    For local files:
+    1. Parses the existing PEP 723 metadata
+    2. Runs the bisection process directly
 
     Examples:
 
-        # Basic usage
+        # From GitHub issue
+        script-bisect https://github.com/pandas/pandas/issues/12345 pandas
+
+        # From local script
         script-bisect script.py xarray v2024.01.0 v2024.03.0
 
-        # With custom repository
-        script-bisect script.py numpy 1.24.0 main --repo-url https://github.com/numpy/numpy
-
-        # Find when something was fixed
-        script-bisect script.py pandas v1.5.0 v2.0.0 --inverse
-
-    The script must contain PEP 723 inline metadata with the target package
-    as a dependency (either normal or git dependency).
+        # With custom repository and options
+        script-bisect script.py numpy 1.24.0 main --repo-url https://github.com/numpy/numpy --inverse
     """
     setup_logging(verbose)
 
     try:
         print_banner()
 
-        # Parse the script to validate and extract information
-        console.print("[dim]📄 Parsing script metadata...[/dim]")
-        parser = ScriptParser(script)
-
-        # Interactive package selection if not provided
-        if not package:
-            available = parser.get_available_packages()
-            package = prompt_for_package(available)
-        elif not parser.has_package(package):
-            console.print(
-                f"[red]❌ Package '{package}' not found in script dependencies[/red]"
+        # Auto-detect source type
+        if _is_github_url(source):
+            console.print("[dim]🔍 Detected GitHub URL, extracting script...[/dim]")
+            _handle_github_url(
+                source,
+                package,
+                good_ref,
+                bad_ref,
+                repo_url,
+                test_command,
+                clone_dir,
+                keep_clone,
+                inverse,
+                dry_run,
+                verify_endpoints,
+                no_edit,
+                keep_script,
             )
-            available = parser.get_available_packages()
-            if available:
-                console.print("[yellow]Available packages:[/yellow]")
-                for pkg in available:
-                    console.print(f"  • {pkg}")
-            sys.exit(1)
-
-        # Auto-detect repository URL if not provided
-        if not repo_url:
-            console.print("[dim]🔍 Auto-detecting repository URL...[/dim]")
-            repo_url = parser.get_repository_url(package)
-            if not repo_url:
-                repo_url = prompt_for_repo_url(package)
-
-        # Interactive prompts for missing git refs
-        if not good_ref or not bad_ref:
-            good_ref, bad_ref = prompt_for_refs(package, repo_url, good_ref, bad_ref)
-
-        # Validate and potentially swap refs if they're in wrong order
-        good_ref, bad_ref = _validate_and_fix_refs(good_ref, bad_ref, inverse)
-
-        # Show confirmation unless all parameters were provided via command line
-        if not all([package, good_ref, bad_ref]) and not confirm_bisection_params(
-            script, package, good_ref, bad_ref, repo_url, test_command, inverse
-        ):
-            console.print("[yellow]⚠️ Bisection cancelled[/yellow]")
-            return
-
-        if dry_run:
-            print_summary_table(script, package, repo_url, good_ref, bad_ref)
-            console.print(
-                "[yellow]🏃 Dry run mode - no actual bisection will be performed[/yellow]"
+        elif Path(source).exists():
+            console.print("[dim]📄 Detected script file, running bisection...[/dim]")
+            _handle_script_file(
+                Path(source),
+                package,
+                good_ref,
+                bad_ref,
+                repo_url,
+                test_command,
+                clone_dir,
+                keep_clone,
+                inverse,
+                dry_run,
+                verify_endpoints,
             )
-            return
-
-        # Create and run the bisector
-        bisector = GitBisector(
-            script_path=script,
-            package=package,
-            repo_url=repo_url,
-            good_ref=good_ref,
-            bad_ref=bad_ref,
-            test_command=test_command,
-            clone_dir=clone_dir,
-            keep_clone=keep_clone,
-            inverse=inverse,
-            skip_verification=not verify_endpoints,
-        )
-
-        result = bisector.run()
-
-        if result:
-            console.print("\n[green]✨ Bisection completed successfully![/green]")
-            # TODO: Display result details
         else:
+            console.print(f"[red]❌ Source not found or invalid: {source}[/red]")
             console.print(
-                "\n[yellow]⚠️ Bisection completed but no clear result found[/yellow]"
+                "[yellow]💡 SOURCE should be a GitHub URL or existing script file[/yellow]"
             )
+            sys.exit(1)
 
     except ScriptBisectError as e:
         console.print(f"[red]❌ Error: {e}[/red]")
@@ -237,24 +225,260 @@ def main(
         sys.exit(1)
 
 
+def _is_github_url(url: str) -> bool:
+    """Check if a string looks like a GitHub URL."""
+    return url.startswith("https://github.com/") and (
+        "/issues/" in url or "/pull/" in url
+    )
+
+
+def _handle_github_url(
+    github_url: str,
+    package: str | None = None,
+    good_ref: str | None = None,
+    bad_ref: str | None = None,
+    repo_url: str | None = None,
+    test_command: str | None = None,
+    clone_dir: Path | None = None,
+    keep_clone: bool = False,
+    inverse: bool = False,
+    dry_run: bool = False,
+    verify_endpoints: bool = False,
+    no_edit: bool = False,
+    keep_script: bool = False,
+) -> None:
+    """Handle GitHub URL workflow."""
+    # Initialize components
+    importer = GitHubIssueImporter()
+    generator = ScriptGenerator()
+    editor = EditorIntegration()
+
+    # Step 1: Import code blocks from GitHub
+    console.print(f"[dim]🔍 Importing from: {github_url}[/dim]")
+    code_blocks = importer.import_from_url(github_url)
+
+    if not code_blocks:
+        console.print("[red]❌ No code blocks found in the GitHub issue/comments[/red]")
+        sys.exit(1)
+
+    # Step 2: Let user select the code block to use
+    selected_block = prompt_for_code_block(code_blocks)
+
+    # Step 3: Generate script with PEP 723 metadata
+    console.print("[dim]🔧 Generating script with PEP 723 metadata...[/dim]")
+
+    # Suggest additional dependencies based on common patterns
+    suggested_deps = generator.suggest_common_dependencies(selected_block.content)
+
+    # Include the package being bisected in dependencies
+    if package and package not in suggested_deps:
+        suggested_deps.append(package)
+        console.print(
+            f"[green]📦 Including target package in dependencies: {package}[/green]"
+        )
+
+    if suggested_deps:
+        console.print(
+            f"[yellow]💡 Suggested dependencies: {', '.join(suggested_deps)}[/yellow]"
+        )
+
+    # Create temporary script
+    script_path = generator.create_temporary_script(
+        selected_block, additional_dependencies=suggested_deps
+    )
+
+    try:
+        # Step 4: Allow user to edit the script (unless --no-edit)
+        if not no_edit:
+            if not editor.edit_script_interactively(script_path):
+                console.print("[yellow]⚠️ Script editing cancelled[/yellow]")
+                return
+
+            # Validate syntax after editing
+            is_valid, error_msg = editor.validate_script_syntax(script_path)
+            if not is_valid:
+                console.print(f"[red]❌ Script has syntax errors: {error_msg}[/red]")
+                if not Confirm.ask("Continue anyway?", default=False):
+                    return
+
+        # Show preview of the final script
+        editor.show_script_preview(script_path)
+
+        # Step 5: Parse the generated script and proceed with bisection
+        console.print("[dim]📄 Parsing generated script...[/dim]")
+        parser = ScriptParser(script_path)
+
+        # Step 6: Continue with common bisection logic
+        _run_bisection(
+            script_path,
+            parser,
+            package,
+            good_ref,
+            bad_ref,
+            repo_url,
+            test_command,
+            clone_dir,
+            keep_clone,
+            inverse,
+            dry_run,
+            verify_endpoints,
+        )
+
+    finally:
+        # Cleanup temporary script unless --keep-script
+        if not keep_script and script_path.exists():
+            try:
+                script_path.unlink()
+                console.print(
+                    f"[dim]🗑️ Cleaned up temporary script: {script_path.name}[/dim]"
+                )
+            except OSError:
+                console.print(
+                    f"[yellow]⚠️ Could not remove temporary script: {script_path}[/yellow]"
+                )
+
+
+def _handle_script_file(
+    script: Path,
+    package: str | None = None,
+    good_ref: str | None = None,
+    bad_ref: str | None = None,
+    repo_url: str | None = None,
+    test_command: str | None = None,
+    clone_dir: Path | None = None,
+    keep_clone: bool = False,
+    inverse: bool = False,
+    dry_run: bool = False,
+    verify_endpoints: bool = False,
+) -> None:
+    """Handle local script file workflow."""
+    # Parse the script to validate and extract information
+    console.print("[dim]📄 Parsing script metadata...[/dim]")
+    parser = ScriptParser(script)
+
+    # Continue with common bisection logic
+    _run_bisection(
+        script,
+        parser,
+        package,
+        good_ref,
+        bad_ref,
+        repo_url,
+        test_command,
+        clone_dir,
+        keep_clone,
+        inverse,
+        dry_run,
+        verify_endpoints,
+    )
+
+
+def _run_bisection(
+    script_path: Path,
+    parser: ScriptParser,
+    package: str | None = None,
+    good_ref: str | None = None,
+    bad_ref: str | None = None,
+    repo_url: str | None = None,
+    test_command: str | None = None,
+    clone_dir: Path | None = None,
+    keep_clone: bool = False,
+    inverse: bool = False,
+    dry_run: bool = False,
+    verify_endpoints: bool = False,
+) -> None:
+    """Run the common bisection logic."""
+    # Interactive package selection if not provided
+    if not package:
+        available = parser.get_available_packages()
+        if available:
+            package = prompt_for_package(available)
+        else:
+            console.print("[red]❌ No packages found in script dependencies[/red]")
+            sys.exit(1)
+    elif not parser.has_package(package):
+        console.print(
+            f"[red]❌ Package '{package}' not found in script dependencies[/red]"
+        )
+        available = parser.get_available_packages()
+        if available:
+            console.print("[yellow]Available packages:[/yellow]")
+            for pkg in available:
+                console.print(f"  • {pkg}")
+            # For GitHub URLs, we might be bisecting a package that's not in detected deps
+            # but was added manually - show as option but don't force selection
+            if package:
+                console.print(f"  • [dim]{package} (target package)[/dim]")
+                if Confirm.ask(
+                    f"Use target package '{package}' for bisection?", default=True
+                ):
+                    pass  # Keep the original package
+                else:
+                    package = prompt_for_package(available)
+            else:
+                package = prompt_for_package(available)
+        else:
+            sys.exit(1)
+
+    # Auto-detect repository URL if not provided
+    if not repo_url:
+        console.print("[dim]🔍 Auto-detecting repository URL...[/dim]")
+        repo_url = parser.get_repository_url(package)
+        if not repo_url:
+            console.print(
+                f"\n[yellow]⚠️ Could not auto-detect repository URL for '{package}'[/yellow]"
+            )
+            repo_url = prompt_for_repo_url(package)
+
+    # Interactive prompts for missing git refs
+    if not good_ref or not bad_ref:
+        good_ref, bad_ref = prompt_for_refs(package, repo_url, good_ref, bad_ref)
+
+    # Validate and potentially swap refs
+    good_ref, bad_ref = _validate_and_fix_refs(good_ref, bad_ref, inverse)
+
+    # Show confirmation
+    if not confirm_bisection_params(
+        script_path, package, good_ref, bad_ref, repo_url, test_command, inverse
+    ):
+        console.print("[yellow]⚠️ Bisection cancelled[/yellow]")
+        return
+
+    if dry_run:
+        print_summary_table(script_path, package, repo_url, good_ref, bad_ref)
+        console.print(
+            "[yellow]🏃 Dry run mode - no actual bisection will be performed[/yellow]"
+        )
+        return
+
+    # Create and run the bisector
+    bisector = GitBisector(
+        script_path=script_path,
+        package=package,
+        repo_url=repo_url,
+        good_ref=good_ref,
+        bad_ref=bad_ref,
+        test_command=test_command,
+        clone_dir=clone_dir,
+        keep_clone=keep_clone,
+        inverse=inverse,
+        skip_verification=not verify_endpoints,
+    )
+
+    result = bisector.run()
+
+    if result:
+        console.print("\n[green]✨ Bisection completed successfully![/green]")
+    else:
+        console.print(
+            "\n[yellow]⚠️ Bisection completed but no clear result found[/yellow]"
+        )
+
+
 def _validate_and_fix_refs(
     good_ref: str, bad_ref: str, inverse: bool
 ) -> tuple[str, str]:
-    """Validate git references and potentially swap them if needed.
-
-    This function helps handle edge cases where users accidentally:
-    - Swap good/bad refs
-    - Provide the same ref for both
-    - Use obviously wrong chronological order
-
-    Args:
-        good_ref: The "good" reference provided by user
-        bad_ref: The "bad" reference provided by user
-        inverse: Whether this is inverse mode (finding when something was fixed)
-
-    Returns:
-        Tuple of (validated_good_ref, validated_bad_ref)
-    """
+    """Validate git references and potentially swap them if needed."""
     # Check for same refs
     if good_ref == bad_ref:
         console.print("[red]❌ Good and bad references cannot be the same[/red]")
@@ -274,8 +498,6 @@ def _validate_and_fix_refs(
         console.print("and the '[red]bad[/red]' ref should be a newer broken version.")
         console.print()
 
-        from rich.prompt import Confirm
-
         try:
             if Confirm.ask("[bold]Swap the references?[/bold]", default=True):
                 good_ref, bad_ref = bad_ref, good_ref
@@ -287,20 +509,7 @@ def _validate_and_fix_refs(
 
 
 def _looks_like_newer_version(ref1: str, ref2: str) -> bool:
-    """Check if ref1 looks like a newer version than ref2.
-
-    This is a heuristic for common version patterns like:
-    - v1.2.0 vs v2.0.0
-    - 2024.01.0 vs 2024.12.0
-    - 1.0 vs 2.0
-
-    Args:
-        ref1: First reference
-        ref2: Second reference
-
-    Returns:
-        True if ref1 appears to be a newer version than ref2
-    """
+    """Check if ref1 looks like a newer version than ref2."""
     import re
 
     # Extract version-like patterns

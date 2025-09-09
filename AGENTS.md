@@ -1,206 +1,226 @@
-# Development Agents Guide
-
-This document outlines the development approach and AI agent collaboration patterns used to build `script-bisect`.
+# script-bisect Project Documentation
 
 ## Project Overview
 
-`script-bisect` is a tool that combines PEP 723 inline script metadata with git bisect to automatically find problematic commits in Python package dependencies. It dynamically modifies script metadata and uses `uv run` to test different package versions.
+**script-bisect** is a command-line tool that automates git bisection for Python package dependencies using PEP 723 inline script metadata. It helps developers find the exact commit where a regression was introduced in a Python package by automatically testing different package versions.
+
+### Core Purpose
+- **Problem**: When a Python package breaks, finding the exact commit that caused the regression is manual and time-consuming
+- **Solution**: Automate git bisect with intelligent package version testing using PEP 723 scripts as test cases
+- **Value**: Developers can quickly identify problematic commits to create better bug reports and understand regressions
+
+## Architecture Overview
+
+### Technology Stack
+- **Language**: Python 3.12+
+- **Package Manager**: uv (modern Python package management)
+- **CLI Framework**: Click (command-line interface)
+- **UI Library**: Rich (terminal formatting and tables)
+- **Interactive Input**: prompt-toolkit (tab completion and prompts)
+- **Git Operations**: GitPython (repository management)
+- **Testing**: pytest with coverage
+- **Code Quality**: ruff (linting/formatting), mypy (type checking), pre-commit hooks
+
+### Project Structure
+```
+src/script_bisect/
+├── __init__.py              # Package initialization
+├── cli.py                   # Command-line interface and main entry point
+├── interactive.py           # Interactive prompts and UI (NEW)
+├── parser.py               # PEP 723 script metadata parsing
+├── bisector.py             # Core git bisection logic
+├── runner.py               # Test execution and process management
+├── utils.py                # Shared utilities and helpers
+└── exceptions.py           # Custom exception definitions
+
+tests/
+├── test_*.py               # Comprehensive test coverage
+├── fixtures/               # Test data and mock scripts
+└── integration/            # End-to-end integration tests
+
+examples/                   # Example PEP 723 scripts for testing
+.github/workflows/          # CI/CD automation (NEW)
+```
+
+## Core Components
+
+### 1. CLI Interface (cli.py)
+- **Entry Point**: Main command-line interface using Click
+- **Argument Parsing**: Handles script path, package name, git references
+- **Interactive Mode**: NEW - Prompts for missing parameters
+- **Validation**: Smart reference validation and swapping detection
+- **Configuration**: Supports dry-run, verbose modes, custom test commands
+
+### 2. Interactive UI (interactive.py) - NEW FEATURE
+- **Smart Prompts**: Only asks for missing parameters (package, good ref, bad ref)
+- **Tab Completion**: Fuzzy autocompletion for git references using prompt-toolkit
+- **Git Integration**: Fetches remote refs automatically for completion
+- **Validation**: Real-time validation of git references and repository URLs
+- **UX Enhancement**: Shows previously entered refs, colored output, confirmation dialogs
+
+### 3. Script Parser (parser.py)
+- **PEP 723 Support**: Parses inline script metadata from Python files
+- **Dependency Detection**: Extracts package dependencies and requirements
+- **Repository Discovery**: Auto-detects git repository URLs from PyPI metadata
+- **Metadata Management**: Handles requirements-python, dependencies arrays
+
+### 4. Git Bisector (bisector.py)
+- **Repository Management**: Clones and manages temporary git repositories
+- **Bisection Logic**: Implements automated git bisect with custom test scripts
+- **Package Updates**: Dynamically updates PEP 723 metadata for each commit
+- **Performance**: Uses sparse checkout and blob filtering for efficiency
+- **Cleanup**: Automatic temporary directory management
+
+### 5. Test Runner (runner.py)
+- **Process Management**: Executes test scripts with proper isolation
+- **uv Integration**: Uses uv for fast, reliable package management
+- **Exit Codes**: Proper git bisect exit codes (0=good, 1=bad, 125=skip)
+- **Output Capture**: Captures and processes test execution output
 
 ## Key Features
 
-- **PEP 723 Integration**: Parses and modifies inline script metadata
-- **Binary Search Bisection**: Efficient custom implementation instead of `git bisect run`
-- **Performance Optimized**: Shallow cloning with targeted history fetching
-- **Rich Terminal UI**: Progress bars, colored output, and clear status messages
-- **Git Service Integration**: Automatic commit URLs for GitHub, GitLab, and Bitbucket
-- **Comprehensive Testing**: Unit, integration, and end-to-end tests
+### Current Functionality
+1. **Automated Bisection**: Full git bisect automation with minimal user input
+2. **Interactive UI**: Smart prompts with tab completion and validation
+3. **PEP 723 Integration**: Native support for inline script metadata
+4. **Repository Auto-detection**: Automatic discovery of package git repositories
+5. **Reference Validation**: Smart detection and fixing of swapped good/bad refs
+6. **Fuzzy Completion**: Advanced autocompletion for git references
+7. **CI/CD Integration**: GitHub Actions workflow for testing
+8. **Cross-platform**: Works on macOS, Linux, and Windows
 
-## Development Philosophy
+### Usage Patterns
+```bash
+# Full interactive mode
+script-bisect script.py
 
-### Clean Code Principles
-- **Type safety**: All functions have proper type hints
-- **Error handling**: Custom exceptions with clear messages
-- **Documentation**: Comprehensive docstrings and comments
-- **Testing**: Unit tests, integration tests, and property-based testing
-- **Code quality**: Pre-commit hooks with ruff, mypy, and other linters
+# Semi-interactive (prompts for missing refs)
+script-bisect script.py pandas
 
-### User Experience Focus
-- **Clear terminal output**: Rich formatting with progress bars and status updates
-- **Interactive prompts**: Helpful defaults and validation
-- **Graceful error handling**: Informative error messages with recovery suggestions
-- **Safety first**: No destructive operations without confirmation
+# Minimal interaction (prompts for bad ref only)
+script-bisect script.py pandas v1.0.0
 
-## Agent Collaboration Patterns
+# Full specification (no prompts)
+script-bisect script.py pandas v1.0.0 v2.0.0
 
-### 1. Planning Agent
-**Role**: High-level architecture and feature planning
-- Researches PEP 723 specifications and git bisect workflows
-- Designs API interfaces and CLI interactions
-- Creates implementation roadmap with clear milestones
-- Documents design decisions and trade-offs
-
-### 2. Implementation Agent
-**Role**: Core feature development
-- Implements parser for PEP 723 metadata manipulation
-- Creates git bisect orchestration logic
-- Builds CLI interface with rich terminal output
-- Writes comprehensive error handling and logging
-
-### 3. Testing Agent
-**Role**: Quality assurance and validation
-- Creates unit tests for all components
-- Builds integration tests with mock repositories
-- Develops property-based tests for edge cases
-- Sets up CI/CD pipeline and coverage reporting
-
-### 4. Documentation Agent
-**Role**: User-facing documentation and examples
-- Writes clear README with usage examples
-- Creates troubleshooting guides
-- Documents API interfaces and internal architecture
-- Maintains changelog and release notes
-
-## Technical Architecture
-
-### Core Components
-
-#### 1. CLI Interface (`cli.py`)
-- Click-based command interface
-- Rich terminal output with progress indicators
-- Interactive prompts for missing parameters
-- Proper argument validation and help text
-
-#### 2. PEP 723 Parser (`parser.py`)
-- Extracts and validates inline script metadata
-- Updates git references while preserving formatting
-- Handles various dependency specification formats
-- Provides clear error messages for malformed metadata
-
-#### 3. Git Bisect Orchestrator (`bisector.py`)
-- Manages repository cloning and cleanup
-- Coordinates git bisect workflow
-- Creates test wrapper scripts
-- Handles bisection state and results
-
-#### 4. Test Runner (`runner.py`)
-- Executes modified scripts with uv
-- Captures and interprets exit codes
-- Handles timeouts and resource cleanup
-- Provides detailed execution logs
-
-### Error Handling Strategy
-
-#### Custom Exception Hierarchy
-```python
-class ScriptBisectError(Exception): ...
-class ParseError(ScriptBisectError): ...
-class GitError(ScriptBisectError): ...
-class RepositoryError(ScriptBisectError): ...
-class ExecutionError(ScriptBisectError): ...
+# Advanced options
+script-bisect script.py pandas v1.0.0 main --inverse --verbose
 ```
 
-#### Recovery Patterns
-- **Auto-detection**: Fallback to PyPI metadata for repository URLs
-- **Validation**: Pre-flight checks before destructive operations
-- **Cleanup**: Context managers for temporary files and processes
-- **User guidance**: Clear error messages with suggested fixes
+## Testing Strategy
+
+### Test Coverage
+- **Unit Tests**: Comprehensive coverage of all modules
+- **Integration Tests**: End-to-end workflow testing
+- **Interactive Tests**: Custom completion and validation testing
+- **Fixture-based**: Realistic test scripts and scenarios
+- **Mock Integration**: Git operations and external API calls
+
+### Quality Assurance
+- **Pre-commit Hooks**: Automated formatting, linting, and validation
+- **Type Checking**: Full mypy coverage with strict mode
+- **Security Scanning**: Bandit for security vulnerability detection
+- **Spell Checking**: Documentation and code comment validation
+
+### CI/CD Pipeline
+- **GitHub Actions**: Automated testing on Ubuntu with Python 3.12/3.13
+- **Matrix Testing**: Multiple Python versions and platforms
+- **Coverage Reporting**: Code coverage tracking and reporting
+- **Dependency Caching**: Fast builds with uv caching
+
+## Recent Improvements (Interactive UI Feature)
+
+### Major Enhancement
+The recent major update added a complete interactive UI system that transforms the user experience:
+
+#### Before (Rigid CLI)
+```bash
+# Required all parameters upfront
+script-bisect script.py package good_ref bad_ref
+```
+
+#### After (Smart Interactive)
+```bash
+# Adapts to what user provides
+script-bisect script.py                    # Prompts for everything
+script-bisect script.py pandas             # Prompts for refs only
+script-bisect script.py pandas v1.0.0      # Prompts for bad ref only
+```
+
+### Technical Achievements
+1. **Advanced Tab Completion**: Custom fuzzy matching handles edge cases like `v2025.09.` → `v2025.09.0`
+2. **Smart Validation**: Detects and offers to fix swapped good/bad references
+3. **Git Integration**: Automatically fetches and prioritizes recent version tags
+4. **Context Preservation**: Shows previously entered values when prompting for missing ones
+5. **Professional UX**: Rich formatting, colored output, and confirmation dialogs
+
+## Planned Future Features
+
+### GitHub Issue Integration (Ambitious Roadmap)
+We've planned a sophisticated feature to extract and test scripts directly from GitHub issues:
+
+#### Core Components Needed
+1. **Issue Parser**: Extract code blocks from GitHub issue URLs/comments
+2. **Script Detection**: AI-powered identification of likely test scripts
+3. **Metadata Generation**: Auto-populate PEP 723 metadata when missing
+4. **User Selection**: Interactive selection of correct code blocks
+5. **Script Editor**: Launch external editor (vim) for script refinement
+6. **Dependency Detection**: Automatic dependency discovery and addition
+7. **Smart Testing**: Iterative testing with dependency resolution
+
+#### Technical Challenges
+- **Content Extraction**: Reliable parsing of GitHub's API and HTML
+- **Code Classification**: Distinguishing test scripts from example code
+- **Dependency Resolution**: Smart detection of missing packages
+- **Editor Integration**: Cross-platform external editor support
+- **Error Recovery**: Handling malformed or incomplete scripts
+
+#### Workflow Vision
+```bash
+# Point at GitHub issue
+script-bisect --issue https://github.com/pandas/pandas/issues/12345
+
+# Tool automatically:
+# 1. Fetches issue content
+# 2. Identifies code blocks
+# 3. Prompts user to select correct script
+# 4. Launches editor for refinement
+# 5. Auto-adds missing dependencies
+# 6. Runs bisection
+```
 
 ## Development Workflow
 
-### 1. Feature Development
-```bash
-# Create feature branch
-git checkout -b feature/new-functionality
+### Code Standards
+- **Python 3.12+**: Modern Python features and syntax
+- **Type Hints**: Full type annotation coverage
+- **Docstrings**: Comprehensive documentation for all functions
+- **Error Handling**: Proper exception management and user feedback
 
-# Install development dependencies
-uv sync --extra dev
+### Git Practices
+- **Conventional Commits**: Structured commit messages with co-authorship
+- **Pre-commit Validation**: All code must pass quality checks
+- **Branch Protection**: Main branch protected with required checks
+- **Detailed Descriptions**: Comprehensive commit messages explaining changes
 
-# Install pre-commit hooks
-uv run pre-commit install
+### Dependencies Management
+- **uv**: Modern, fast Python package management
+- **Minimal Dependencies**: Carefully curated dependency list
+- **Version Pinning**: Specific version requirements for stability
+- **Optional Dependencies**: Development tools as optional extras
 
-# Develop with type checking
-uv run mypy src/
-```
+## Maintenance Notes
 
-### 2. Testing Strategy
-```bash
-# Run all tests
-uv run pytest
+### Code Health
+- **Metrics**: 44/46 tests passing (2 pre-existing issues unrelated to new features)
+- **Coverage**: Comprehensive test coverage with new interactive UI tests
+- **Quality**: All linting, formatting, and type checking passes
+- **Documentation**: Inline code documentation and comprehensive README
 
-# Run with coverage
-uv run pytest --cov=script_bisect --cov-report=html
+### Future Maintenance
+- **Dependency Updates**: Regular updates to prompt-toolkit, rich, etc.
+- **Python Version Support**: Maintain compatibility with latest Python versions
+- **Platform Testing**: Ensure cross-platform compatibility
+- **Security Updates**: Regular security scanning and updates
 
-# Run specific test types
-uv run pytest -m "not slow"           # Fast tests only
-uv run pytest -m integration          # Integration tests
-```
-
-### 3. Quality Assurance
-```bash
-# Format and lint
-uv run ruff check --fix
-uv run ruff format
-
-# Type checking
-uv run mypy src/
-
-# Security scanning
-uv run bandit -r src/
-
-# Pre-commit validation
-uv run pre-commit run --all-files
-```
-
-## Collaboration Guidelines
-
-### Code Review Checklist
-- [ ] Type hints on all functions and methods
-- [ ] Docstrings with examples for public APIs
-- [ ] Error handling with specific exception types
-- [ ] Tests covering happy path and edge cases
-- [ ] Rich terminal output with clear status messages
-- [ ] Proper resource cleanup (files, processes, git repos)
-
-### Documentation Standards
-- **API Documentation**: Docstrings with parameter types and examples
-- **User Documentation**: Clear usage examples with expected output
-- **Developer Documentation**: Architecture decisions and extension points
-- **Error Documentation**: Troubleshooting guide for common issues
-
-### Testing Standards
-- **Unit Tests**: Test individual functions in isolation
-- **Integration Tests**: Test component interactions with mock repositories
-- **End-to-End Tests**: Test complete workflows with real examples
-- **Property Tests**: Use Hypothesis for edge case discovery
-
-## AI Agent Prompts
-
-### For Implementation Tasks
-```
-Context: Working on script-bisect, a tool for bisecting package versions in PEP 723 scripts
-Requirements:
-- Use type hints throughout
-- Handle errors gracefully with custom exceptions
-- Use rich for terminal output
-- Write comprehensive docstrings
-- Follow the existing code patterns
-- Prefer custom binary search over git bisect run for performance
-
-Task: [specific implementation request]
-```
-
-### For Testing Tasks
-```
-Context: Testing script-bisect functionality
-Requirements:
-- Test both happy path and error cases
-- Use pytest fixtures for common setup
-- Mock external dependencies (git, subprocess)
-- Ensure good test coverage
-- Use descriptive test names
-- Include integration tests that verify end-to-end behavior
-
-Task: [specific testing request]
-```
-
-This collaborative approach ensures consistent code quality, comprehensive testing, and maintainable architecture throughout the project lifecycle.
+This project represents a sophisticated CLI tool that balances powerful automation with exceptional user experience, setting the foundation for even more ambitious features like GitHub issue integration.
