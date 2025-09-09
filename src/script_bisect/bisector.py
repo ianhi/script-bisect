@@ -340,11 +340,17 @@ class GitBisector:
                     advance=1
                 )
                 
-                # Get just the first line of the commit message
+                # Get just the first line of the commit message and clean it
                 if commit.message:
+                    # Get first line and replace any remaining newlines with spaces
                     subject = commit.message.strip().split('\\n')[0].strip()
+                    # Replace any remaining newline chars that might be embedded
+                    subject = subject.replace('\\n', ' ').replace('\\r', ' ')
+                    # Clean up multiple spaces
+                    subject = ' '.join(subject.split())
                 else:
                     subject = 'No message'
+                
                 console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({subject})")
                 
                 result = self._test_commit(commit)
