@@ -1,10 +1,19 @@
 # Development Agents Guide
 
-This document outlines the development approach and AI agent collaboration patterns used to build `uv-bisect`.
+This document outlines the development approach and AI agent collaboration patterns used to build `script-bisect`.
 
 ## Project Overview
 
-`uv-bisect` is a tool that combines PEP 723 inline script metadata with git bisect to automatically find problematic commits in Python package dependencies. It dynamically modifies script metadata and uses `uv run` to test different package versions.
+`script-bisect` is a tool that combines PEP 723 inline script metadata with git bisect to automatically find problematic commits in Python package dependencies. It dynamically modifies script metadata and uses `uv run` to test different package versions.
+
+## Key Features
+
+- **PEP 723 Integration**: Parses and modifies inline script metadata
+- **Binary Search Bisection**: Efficient custom implementation instead of `git bisect run`
+- **Performance Optimized**: Shallow cloning with targeted history fetching
+- **Rich Terminal UI**: Progress bars, colored output, and clear status messages
+- **Git Service Integration**: Automatic commit URLs for GitHub, GitLab, and Bitbucket
+- **Comprehensive Testing**: Unit, integration, and end-to-end tests
 
 ## Development Philosophy
 
@@ -25,12 +34,12 @@ This document outlines the development approach and AI agent collaboration patte
 
 ### 1. Planning Agent
 **Role**: High-level architecture and feature planning
-- Researches PEP 723 specifications and git bisect workflows  
+- Researches PEP 723 specifications and git bisect workflows
 - Designs API interfaces and CLI interactions
 - Creates implementation roadmap with clear milestones
 - Documents design decisions and trade-offs
 
-### 2. Implementation Agent  
+### 2. Implementation Agent
 **Role**: Core feature development
 - Implements parser for PEP 723 metadata manipulation
 - Creates git bisect orchestration logic
@@ -83,15 +92,16 @@ This document outlines the development approach and AI agent collaboration patte
 
 #### Custom Exception Hierarchy
 ```python
-class UvBisectError(Exception): ...
-class ParseError(UvBisectError): ...
-class GitError(UvBisectError): ...
-class ExecutionError(UvBisectError): ...
+class ScriptBisectError(Exception): ...
+class ParseError(ScriptBisectError): ...
+class GitError(ScriptBisectError): ...
+class RepositoryError(ScriptBisectError): ...
+class ExecutionError(ScriptBisectError): ...
 ```
 
 #### Recovery Patterns
 - **Auto-detection**: Fallback to PyPI metadata for repository URLs
-- **Validation**: Pre-flight checks before destructive operations  
+- **Validation**: Pre-flight checks before destructive operations
 - **Cleanup**: Context managers for temporary files and processes
 - **User guidance**: Clear error messages with suggested fixes
 
@@ -118,7 +128,7 @@ uv run mypy src/
 uv run pytest
 
 # Run with coverage
-uv run pytest --cov=uv_bisect --cov-report=html
+uv run pytest --cov=script_bisect --cov-report=html
 
 # Run specific test types
 uv run pytest -m "not slow"           # Fast tests only
@@ -167,26 +177,28 @@ uv run pre-commit run --all-files
 
 ### For Implementation Tasks
 ```
-Context: Working on uv-bisect, a tool for bisecting package versions in PEP 723 scripts
-Requirements: 
+Context: Working on script-bisect, a tool for bisecting package versions in PEP 723 scripts
+Requirements:
 - Use type hints throughout
 - Handle errors gracefully with custom exceptions
 - Use rich for terminal output
 - Write comprehensive docstrings
 - Follow the existing code patterns
+- Prefer custom binary search over git bisect run for performance
 
 Task: [specific implementation request]
 ```
 
-### For Testing Tasks  
+### For Testing Tasks
 ```
-Context: Testing uv-bisect functionality
+Context: Testing script-bisect functionality
 Requirements:
 - Test both happy path and error cases
 - Use pytest fixtures for common setup
 - Mock external dependencies (git, subprocess)
 - Ensure good test coverage
 - Use descriptive test names
+- Include integration tests that verify end-to-end behavior
 
 Task: [specific testing request]
 ```

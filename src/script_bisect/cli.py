@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
 
 import click
 from rich.console import Console
@@ -16,7 +15,6 @@ from .bisector import GitBisector
 from .exceptions import ScriptBisectError
 from .parser import ScriptParser
 from .utils import setup_logging
-
 
 console = Console()
 
@@ -42,13 +40,13 @@ def print_summary_table(
     table = Table(title="Bisection Summary", show_header=True)
     table.add_column("Parameter", style="cyan", width=20)
     table.add_column("Value", style="white")
-    
+
     table.add_row("📄 Script", str(script_path))
     table.add_row("📦 Package", package)
     table.add_row("🔗 Repository", repo_url)
     table.add_row("✅ Good ref", good_ref)
     table.add_row("❌ Bad ref", bad_ref)
-    
+
     console.print(table)
 
 
@@ -119,47 +117,49 @@ def main(
     verify_endpoints: bool = False,
 ) -> None:
     """Bisect package versions in PEP 723 Python scripts.
-    
+
     This tool uses git bisect to find the commit that introduced a regression
     in a Python package dependency. It works by:
-    
+
     1. Parsing the PEP 723 metadata in your script
-    2. Cloning the package repository 
+    2. Cloning the package repository
     3. Running git bisect with automatic testing
     4. Updating the package reference for each commit tested
-    
+
     Examples:
-    
+
         # Basic usage
         script-bisect script.py xarray v2024.01.0 v2024.03.0
-        
+
         # With custom repository
         script-bisect script.py numpy 1.24.0 main --repo-url https://github.com/numpy/numpy
-        
+
         # Find when something was fixed
         script-bisect script.py pandas v1.5.0 v2.0.0 --inverse
-        
+
     The script must contain PEP 723 inline metadata with the target package
     as a dependency (either normal or git dependency).
     """
     setup_logging(verbose)
-    
+
     try:
         print_banner()
-        
+
         # Parse the script to validate and extract information
         console.print("[dim]📄 Parsing script metadata...[/dim]")
         parser = ScriptParser(script)
-        
+
         if not parser.has_package(package):
-            console.print(f"[red]❌ Package '{package}' not found in script dependencies[/red]")
+            console.print(
+                f"[red]❌ Package '{package}' not found in script dependencies[/red]"
+            )
             available = parser.get_available_packages()
             if available:
                 console.print("[yellow]Available packages:[/yellow]")
                 for pkg in available:
                     console.print(f"  • {pkg}")
             sys.exit(1)
-        
+
         # Auto-detect repository URL if not provided
         if not repo_url:
             console.print("[dim]🔍 Auto-detecting repository URL...[/dim]")
@@ -170,13 +170,15 @@ def main(
                     "\n[yellow]Please specify --repo-url manually[/yellow]"
                 )
                 sys.exit(1)
-        
+
         print_summary_table(script, package, repo_url, good_ref, bad_ref)
-        
+
         if dry_run:
-            console.print("[yellow]🏃 Dry run mode - no actual bisection will be performed[/yellow]")
+            console.print(
+                "[yellow]🏃 Dry run mode - no actual bisection will be performed[/yellow]"
+            )
             return
-        
+
         # Create and run the bisector
         bisector = GitBisector(
             script_path=script,
@@ -190,15 +192,17 @@ def main(
             inverse=inverse,
             skip_verification=not verify_endpoints,
         )
-        
+
         result = bisector.run()
-        
+
         if result:
             console.print("\n[green]✨ Bisection completed successfully![/green]")
             # TODO: Display result details
         else:
-            console.print("\n[yellow]⚠️ Bisection completed but no clear result found[/yellow]")
-            
+            console.print(
+                "\n[yellow]⚠️ Bisection completed but no clear result found[/yellow]"
+            )
+
     except ScriptBisectError as e:
         console.print(f"[red]❌ Error: {e}[/red]")
         if verbose:
