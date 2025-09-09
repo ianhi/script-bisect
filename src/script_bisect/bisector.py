@@ -56,6 +56,7 @@ class GitBisector:
         clone_dir: Path | None = None,
         keep_clone: bool = False,
         inverse: bool = False,
+        skip_verification: bool = False,
     ) -> None:
         """Initialize the git bisector.
         
@@ -69,6 +70,7 @@ class GitBisector:
             clone_dir: Directory for repository clone (default: temp)
             keep_clone: Whether to keep the cloned repository
             inverse: Whether to find when something was fixed (not broken)
+            skip_verification: Skip endpoint verification for faster startup
         """
         self.script_path = script_path
         self.package = package
@@ -79,6 +81,7 @@ class GitBisector:
         self.clone_dir = clone_dir or create_temp_dir("script_bisect_repo_")
         self.keep_clone = keep_clone
         self.inverse = inverse
+        self.skip_verification = skip_verification
         
         # Initialize components
         self.parser = ScriptParser(script_path)
@@ -251,24 +254,35 @@ class GitBisector:
             
             console.print(f"[dim]Found {len(commits)} commits between {self.good_ref} and {self.bad_ref}[/dim]")
             
-            # Verify the endpoints
-            console.print("\\n[dim]🔍 Verifying endpoints...[/dim]")
-            
-            # Check that good_ref is actually good
-            good_commit = self.repo.commit(self.good_ref)
-            good_result = self._test_commit(good_commit)
-            if good_result is False:
-                console.print(f"[red]❌ Good ref '{self.good_ref}' is not actually good![/red]")
-                return None
-            console.print(f"    ✅ {self.good_ref} is good")
-            
-            # Check that bad_ref is actually bad  
-            bad_commit = self.repo.commit(self.bad_ref)
-            bad_result = self._test_commit(bad_commit)
-            if bad_result is True:
-                console.print(f"[red]❌ Bad ref '{self.bad_ref}' is not actually bad![/red]")
-                return None
-            console.print(f"    ❌ {self.bad_ref} is bad")
+            # Verify the endpoints (unless skipped)
+            if not self.skip_verification:
+                console.print("\\n[dim]🔍 Verifying endpoints...[/dim]")
+                
+                # Check that good_ref is actually good
+                console.print(f"    Testing {self.good_ref}...")
+                good_commit = self.repo.commit(self.good_ref)
+                good_result = self._test_commit(good_commit)
+                if good_result is False:
+                    console.print(f"[red]❌ Good ref '{self.good_ref}' is not actually good![/red]")
+                    return None
+                elif good_result is None:
+                    console.print(f"[yellow]⚠️ Could not test good ref '{self.good_ref}' - continuing anyway[/yellow]")
+                else:
+                    console.print(f"    ✅ {self.good_ref} is good")
+                
+                # Check that bad_ref is actually bad  
+                console.print(f"    Testing {self.bad_ref}...")
+                bad_commit = self.repo.commit(self.bad_ref)
+                bad_result = self._test_commit(bad_commit)
+                if bad_result is True:
+                    console.print(f"[red]❌ Bad ref '{self.bad_ref}' is not actually bad![/red]")
+                    return None
+                elif bad_result is None:
+                    console.print(f"[yellow]⚠️ Could not test bad ref '{self.bad_ref}' - continuing anyway[/yellow]") 
+                else:
+                    console.print(f"    ❌ {self.bad_ref} is bad")
+            else:
+                console.print("\\n[dim]⏩ Skipping endpoint verification[/dim]")
             
             # Run binary search
             console.print("\\n[bold blue]🔄 Starting binary search...[/bold blue]")

@@ -24,7 +24,7 @@ class TestRunner:
         package: str,
         repo_url: str,
         test_command: str | None = None,
-        timeout: int = 300,
+        timeout: int = 120,
     ) -> None:
         """Initialize the test runner.
         
@@ -33,7 +33,7 @@ class TestRunner:
             package: Name of the package being bisected
             repo_url: Git repository URL
             test_command: Custom test command (default: uv run script)
-            timeout: Test timeout in seconds
+            timeout: Test timeout in seconds (default: 120)
         """
         self.script_path = script_path
         self.package = package
