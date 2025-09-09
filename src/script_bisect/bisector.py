@@ -340,7 +340,7 @@ class GitBisector:
                     advance=1
                 )
                 
-                console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({commit.message.split()[0] if commit.message else 'No message'})")
+                console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({commit.message.split('\\n')[0] if commit.message else 'No message'})")
                 
                 result = self._test_commit(commit)
                 
