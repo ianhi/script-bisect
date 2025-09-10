@@ -165,7 +165,97 @@ class RepositoryManager:
             commit = self.repo.commit(ref)
             return str(commit.hexsha)
         except git.BadName as e:
-            raise ValueError(f"Cannot resolve reference '{ref}': {e}") from e
+            # Get suggestions for similar refs
+            suggestions = self._get_similar_refs(ref)
+            if suggestions:
+                suggestion_text = ", ".join(f"'{s}'" for s in suggestions[:3])
+                raise ValueError(
+                    f"Cannot resolve reference '{ref}'. Did you mean: {suggestion_text}?"
+                ) from e
+            else:
+                raise ValueError(f"Cannot resolve reference '{ref}': {e}") from e
+
+    def _get_similar_refs(self, target_ref: str, max_suggestions: int = 3) -> list[str]:
+        """Find similar references using fuzzy matching.
+
+        Args:
+            target_ref: The reference that couldn't be resolved
+            max_suggestions: Maximum number of suggestions to return
+
+        Returns:
+            List of similar reference names
+        """
+        if not self.repo:
+            return []
+
+        try:
+            # Get all available refs (tags and branches)
+            all_refs = []
+
+            # Get tags
+            for tag in self.repo.tags:
+                all_refs.append(str(tag.name))
+
+            # Get remote branches
+            for remote_ref in self.repo.remote().refs:
+                branch_name = str(remote_ref.name).split("/")[
+                    -1
+                ]  # Get just the branch name
+                if branch_name not in all_refs and branch_name != "HEAD":
+                    all_refs.append(branch_name)
+
+            # Simple fuzzy matching based on common patterns
+            suggestions = []
+            target_lower = target_ref.lower()
+
+            # Exact prefix matches first
+            for ref in all_refs:
+                if ref.lower().startswith(target_lower):
+                    suggestions.append(ref)
+
+            # Then substring matches
+            if len(suggestions) < max_suggestions:
+                for ref in all_refs:
+                    if target_lower in ref.lower() and ref not in suggestions:
+                        suggestions.append(ref)
+
+            # Finally, similar length/structure matches for version patterns
+            if len(suggestions) < max_suggestions:
+                import re
+
+                # Check if target looks like a version (v1.2.3, 1.2.3, etc.)
+                version_pattern = re.compile(r"^v?\d+\.\d+(\.\d+)?")
+                if version_pattern.match(target_ref):
+                    for ref in all_refs:
+                        if (
+                            version_pattern.match(ref)
+                            and ref not in suggestions
+                            and self._version_similarity_score(target_ref, ref) > 0.5
+                        ):
+                            suggestions.append(ref)
+
+            return suggestions[:max_suggestions]
+
+        except Exception:
+            # If anything fails, return empty list
+            return []
+
+    def _version_similarity_score(self, ref1: str, ref2: str) -> float:
+        """Calculate a simple similarity score for version-like references."""
+        # Simple heuristic: same prefix (v or not), similar number count
+        ref1_clean = ref1.lower().lstrip("v")
+        ref2_clean = ref2.lower().lstrip("v")
+
+        ref1_parts = ref1_clean.split(".")
+        ref2_parts = ref2_clean.split(".")
+
+        # Prefer same number of parts
+        if len(ref1_parts) == len(ref2_parts):
+            return 0.7
+        elif abs(len(ref1_parts) - len(ref2_parts)) == 1:
+            return 0.6
+        else:
+            return 0.3
 
     def get_commit_range(self, good_ref: str, bad_ref: str) -> list[str]:
         """Get the list of commits between two references.

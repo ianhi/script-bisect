@@ -43,7 +43,44 @@ uv run script-bisect --help
 
 ## Quick Start
 
-### 1. Create a PEP 723 Script
+### Try It Now! 🚀
+
+Create this test script and run it to see script-bisect in action:
+
+```bash
+# Create a test script for a real xarray regression
+cat > test_xarray_issue.py << 'EOF'
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "xarray@git+https://github.com/pydata/xarray.git@main",
+#   "numpy",
+# ]
+# ///
+
+import xarray as xr
+import numpy as np
+
+# Test for xarray issue with Dataset.drop behavior
+# This reproduces a real regression that was fixed
+try:
+    ds = xr.Dataset({'temp': (['x', 'y'], np.ones((2, 3)))})
+    # This behavior changed and was then fixed in xarray
+    result = ds.drop_vars(['temp'])
+    assert len(result.data_vars) == 0
+    print("✅ Test passed!")
+except Exception as e:
+    print(f"❌ Test failed: {e}")
+    exit(1)
+EOF
+
+# Run the bisection (takes ~5-10 minutes)
+uvx script-bisect test_xarray_issue.py xarray v2024.10.0 v2024.12.0 --yes
+```
+
+This will bisect a real xarray issue and show you exactly which commit introduced the regression!
+
+### 1. Create Your Own Script
 
 Create a script that demonstrates your issue:
 
