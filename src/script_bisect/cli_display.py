@@ -78,8 +78,8 @@ def confirm_bisection_params(
 
         table = Table(show_header=False, box=None, padding=(0, 1))
         table.add_column("Key", style="cyan", width=8)
-        table.add_column("Parameter", style="dim", width=20)
-        table.add_column("Value", width=40)
+        table.add_column("Parameter", style="dim", width=16)
+        table.add_column("Value", width=35)
 
         table.add_row("", "📄 Script", str(script_path))
         table.add_row("[p]", "📦 Package", str(current_params["package"]))
