@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -64,7 +64,10 @@ Source = "https://github.com/ianhi/script-bisect"
 script-bisect = "script_bisect.cli:main"
 
 [tool.hatch.version]
-path = "src/script_bisect/__init__.py"
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/script_bisect"]
@@ -164,3 +167,8 @@ skips = ["B101", "B404", "B603", "B607"]  # Skip assert_used, subprocess warning
 
 [tool.bandit.assert_used]
 skips = ["*"]
+
+[dependency-groups]
+dev = [
+    "hatch-vcs>=0.5.0",
+]
