@@ -26,6 +26,12 @@ Point script-bisect directly at a real GitHub issue:
 uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray v2025.07.1 v2025.08.0
 ```
 
+or on a zarr-python issue
+
+```bash
+uvx script-bisect https://github.com/zarr-developers/zarr-python/issues/3167 zarr v3.0.8 27615fd0d20d189b22aac0477ea05b5eca93137f
+```
+
 That's it! script-bisect will:
 
 1. **Extract** the code from the GitHub issue
