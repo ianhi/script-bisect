@@ -118,6 +118,12 @@ def print_summary_table(
     is_flag=True,
     help="Enable verbose output",
 )
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Automatically confirm bisection without prompting",
+)
 @click.version_option(version=__version__)
 def main(
     source: str,
@@ -134,6 +140,7 @@ def main(
     no_edit: bool = False,
     keep_script: bool = False,
     verbose: bool = False,
+    yes: bool = False,
 ) -> None:
     """Bisect package versions in PEP 723 Python scripts.
 
@@ -187,6 +194,7 @@ def main(
                 verify_endpoints,
                 no_edit,
                 keep_script,
+                yes,
             )
         elif Path(source).exists():
             console.print("[dim]📄 Detected script file, running bisection...[/dim]")
@@ -202,6 +210,7 @@ def main(
                 inverse,
                 dry_run,
                 verify_endpoints,
+                yes,
             )
         else:
             console.print(f"[red]❌ Source not found or invalid: {source}[/red]")
@@ -246,6 +255,7 @@ def _handle_github_url(
     verify_endpoints: bool = False,
     no_edit: bool = False,
     keep_script: bool = False,
+    yes: bool = False,
 ) -> None:
     """Handle GitHub URL workflow."""
     # Initialize components
@@ -322,6 +332,8 @@ def _handle_github_url(
             inverse,
             dry_run,
             verify_endpoints,
+            github_context=github_url,
+            yes=yes,
         )
 
     finally:
@@ -350,6 +362,7 @@ def _handle_script_file(
     inverse: bool = False,
     dry_run: bool = False,
     verify_endpoints: bool = False,
+    yes: bool = False,
 ) -> None:
     """Handle local script file workflow."""
     # Parse the script to validate and extract information
@@ -370,6 +383,8 @@ def _handle_script_file(
         inverse,
         dry_run,
         verify_endpoints,
+        github_context=None,  # No GitHub context for local files
+        yes=yes,
     )
 
 
@@ -386,6 +401,8 @@ def _run_bisection(
     inverse: bool = False,
     dry_run: bool = False,
     verify_endpoints: bool = False,
+    github_context: str | None = None,
+    yes: bool = False,
 ) -> None:
     """Run the common bisection logic."""
     # Interactive package selection if not provided
@@ -423,7 +440,7 @@ def _run_bisection(
     # Auto-detect repository URL if not provided
     if not repo_url:
         console.print("[dim]🔍 Auto-detecting repository URL...[/dim]")
-        repo_url = parser.get_repository_url(package)
+        repo_url = parser.get_repository_url(package, github_context)
         if not repo_url:
             console.print(
                 f"\n[yellow]⚠️ Could not auto-detect repository URL for '{package}'[/yellow]"
@@ -439,7 +456,14 @@ def _run_bisection(
 
     # Show confirmation
     if not confirm_bisection_params(
-        script_path, package, good_ref, bad_ref, repo_url, test_command, inverse
+        script_path,
+        package,
+        good_ref,
+        bad_ref,
+        repo_url,
+        test_command,
+        inverse,
+        auto_confirm=yes,
     ):
         console.print("[yellow]⚠️ Bisection cancelled[/yellow]")
         return

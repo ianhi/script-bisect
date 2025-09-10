@@ -21,6 +21,10 @@ Commit success or failure should be on the same line as the commit message (repl
 value (#10596))
     ✅ Good
 
+## UI
+
+Continue with edited script. should show the script, and give the option to go back to editing
+
 ## Cloning
 
 We already get tags for the autocomplete, but then once we start the process we do a shallow clone. this seems redundant. Let's make sure instead of a shallow clone we are doing fetching rev log without the blobs
@@ -34,6 +38,10 @@ Initially during bisect there are weird logging outputs:
 ⠼ ✅ Repository ready for bisection
 
 we should not have those for a consistent visual style
+
+## Error Display
+
+Simplify the error display to the user - it should only show one line with the actual error message instead of full stack traces and multiple lines of debug output.
 
 ## Agent instructions - HARD
 

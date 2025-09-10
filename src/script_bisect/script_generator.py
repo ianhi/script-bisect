@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from .dependency_detector import DependencyDetector
+from .script_autocorrect import ScriptAutoCorrector
 
 if TYPE_CHECKING:
     from .issue_importer import CodeBlock
@@ -22,6 +23,7 @@ class ScriptGenerator:
     def __init__(self) -> None:
         """Initialize the script generator."""
         self.dependency_detector = DependencyDetector()
+        self.auto_corrector = ScriptAutoCorrector()
 
     def generate_script_from_code_block(
         self,
@@ -41,8 +43,21 @@ class ScriptGenerator:
         """
         console.print("[dim]🔧 Generating script with PEP 723 metadata...[/dim]")
 
-        # Detect dependencies from the code
-        detected_deps = self.dependency_detector.detect_dependencies(code_block.content)
+        # Step 1: Auto-correct common script issues
+        corrected_block, fixes_applied = self.auto_corrector.auto_correct_code_block(
+            code_block
+        )
+        if fixes_applied:
+            console.print(
+                f"[yellow]🔧 Applied {len(fixes_applied)} auto-corrections to the script[/yellow]"
+            )
+            for fix in fixes_applied:
+                console.print(f"[dim]  • {fix}[/dim]")
+
+        # Step 2: Detect dependencies from the corrected code
+        detected_deps = self.dependency_detector.detect_dependencies(
+            corrected_block.content
+        )
 
         # Verify packages exist on PyPI
         verified_deps = self.dependency_detector.verify_packages_exist(detected_deps)
@@ -73,11 +88,11 @@ class ScriptGenerator:
         # Format the PEP 723 block
         pep723_block = self.dependency_detector.format_pep723_block(metadata)
 
-        # Combine metadata and code
+        # Combine metadata and corrected code
         script_parts = [
             pep723_block,
             "",  # Empty line after metadata
-            code_block.content,
+            corrected_block.content,
         ]
 
         complete_script = "\n".join(script_parts)

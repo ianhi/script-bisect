@@ -257,6 +257,7 @@ def confirm_bisection_params(
     repo_url: str,
     test_command: str | None = None,
     inverse: bool = False,
+    auto_confirm: bool = False,
 ) -> bool:
     """Show bisection parameters and ask for confirmation.
 
@@ -296,6 +297,12 @@ def confirm_bisection_params(
 
     console.print(table)
     console.print()
+
+    if auto_confirm:
+        console.print(
+            "[bold cyan]Start bisection?[/bold cyan] [green]yes[/green] (auto-confirmed)"
+        )
+        return True
 
     try:
         return Confirm.ask("[bold cyan]Start bisection?[/bold cyan]", default=True)

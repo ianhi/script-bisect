@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .auto_dependency_fixer import AutoDependencyFixer
 from .exceptions import ExecutionError
 from .parser import ScriptParser
 
@@ -40,6 +41,7 @@ class TestRunner:
         self.timeout = timeout
 
         self.parser = ScriptParser(script_path)
+        self.dependency_fixer = AutoDependencyFixer()
 
     def test_commit(self, commit_hash: str) -> bool:
         """Test a specific commit.
@@ -87,7 +89,7 @@ class TestRunner:
             raise ExecutionError(f"Failed to test commit {commit_hash}: {e}") from e
 
     def _run_test(self, script_path: Path) -> bool:
-        """Run the test for a script.
+        """Run the test for a script with automatic dependency fixing.
 
         Args:
             script_path: Path to the script to test
@@ -95,46 +97,116 @@ class TestRunner:
         Returns:
             True if test passes, False otherwise
         """
-        if self.test_command:
-            # Use custom test command
-            command = self.test_command.format(script=script_path)
-            cmd = command.split()
-        else:
-            # Default: uv run script
-            cmd = ["uv", "run", str(script_path)]
+        current_script = script_path
+        max_retries = 3  # Prevent infinite loops
+        retries = 0
+        previous_temp_script = None  # Track previous temp script for cleanup
 
         try:
-            logger.debug(f"Running command: {' '.join(cmd)}")
+            while retries <= max_retries:
+                if self.test_command:
+                    # Use custom test command
+                    command = self.test_command.format(script=current_script)
+                    cmd = command.split()
+                else:
+                    # Default: uv run script
+                    cmd = ["uv", "run", str(current_script)]
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                check=False,  # Don't raise on non-zero exit
-            )
+                try:
+                    logger.debug(f"Running command: {' '.join(cmd)}")
 
-            # Log output for debugging
-            if result.stdout:
-                logger.debug(f"STDOUT: {result.stdout[:500]}")
-            if result.stderr:
-                logger.debug(f"STDERR: {result.stderr[:500]}")
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=self.timeout,
+                        check=False,  # Don't raise on non-zero exit
+                    )
 
-            # Test passes if exit code is 0
-            return result.returncode == 0
+                    # Log output for debugging
+                    if result.stdout:
+                        logger.debug(f"STDOUT: {result.stdout[:500]}")
+                    if result.stderr:
+                        logger.debug(f"STDERR: {result.stderr[:500]}")
 
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Test timed out after {self.timeout} seconds")
-            return False
-        except FileNotFoundError as e:
-            if "uv" in str(e):
-                raise ExecutionError(
-                    "uv not found. Please install uv (https://docs.astral.sh/uv/)"
-                ) from e
-            raise ExecutionError(f"Command not found: {e}") from e
-        except Exception as e:
-            logger.warning(f"Test execution failed: {e}")
-            return False
+                    # If test passes, we're done
+                    if result.returncode == 0:
+                        return True
+
+                    # If test fails, check for dependency issues (allow multiple rounds)
+                    if retries < max_retries:
+                        error_output = result.stdout + "\n" + result.stderr
+
+                        fixed_script, should_retry = (
+                            self.dependency_fixer.fix_and_retry(
+                                current_script, error_output
+                            )
+                        )
+
+                        if should_retry and fixed_script:
+                            # Clean up previous temp script if it exists
+                            if (
+                                previous_temp_script
+                                and previous_temp_script != script_path
+                            ):
+                                self.dependency_fixer.cleanup_temp_script(
+                                    previous_temp_script, script_path
+                                )
+
+                            # Track current script for potential cleanup next iteration
+                            if current_script != script_path:
+                                previous_temp_script = current_script
+
+                            current_script = fixed_script
+                            retries += 1
+                            continue  # Retry with fixed script
+
+                    # Test failed and no more retries - show failure output for debugging
+                    if result.stdout or result.stderr:
+                        from rich.console import Console
+
+                        console = Console()
+                        console.print(
+                            f"[red]💥 Test failed (exit code {result.returncode})[/red]"
+                        )
+                        if result.stdout:
+                            console.print("[yellow]📤 STDOUT:[/yellow]")
+                            console.print(
+                                result.stdout[:1000]
+                                + ("..." if len(result.stdout) > 1000 else "")
+                            )
+                        if result.stderr:
+                            console.print("[yellow]📤 STDERR:[/yellow]")
+                            console.print(
+                                result.stderr[:1000]
+                                + ("..." if len(result.stderr) > 1000 else "")
+                            )
+
+                    return False
+
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Test timed out after {self.timeout} seconds")
+                    return False
+                except FileNotFoundError as e:
+                    if "uv" in str(e):
+                        raise ExecutionError(
+                            "uv not found. Please install uv (https://docs.astral.sh/uv/)"
+                        ) from e
+                    raise ExecutionError(f"Command not found: {e}") from e
+                except Exception as e:
+                    logger.warning(f"Test execution failed: {e}")
+                    return False
+
+        finally:
+            # Clean up any remaining temp scripts
+            if previous_temp_script and previous_temp_script != script_path:  # type: ignore
+                self.dependency_fixer.cleanup_temp_script(
+                    previous_temp_script, script_path
+                )
+            if current_script != script_path and current_script != previous_temp_script:  # type: ignore
+                self.dependency_fixer.cleanup_temp_script(current_script, script_path)
+
+        return False
 
     def validate_test_setup(self) -> bool:
         """Validate that the test setup is correct.

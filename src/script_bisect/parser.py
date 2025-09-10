@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import tomllib
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import tomli_w
 
 from .exceptions import ParseError
 from .utils import extract_package_name
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -58,9 +62,9 @@ class ScriptParser:
         Raises:
             ParseError: If metadata is malformed or missing
         """
-        # Find the script metadata block
+        # Find the script metadata block (allow any lines between markers)
         metadata_pattern = re.compile(
-            r"^# /// script\s*\n((?:^#.*\n)*?)^# ///\s*\n", re.MULTILINE
+            r"^# /// script\s*\n(.*?)^# ///\s*\n", re.MULTILINE | re.DOTALL
         )
 
         match = metadata_pattern.search(self._content)
@@ -109,20 +113,27 @@ class ScriptParser:
         dependencies = self._metadata.get("dependencies", [])
         return [extract_package_name(dep) for dep in dependencies]
 
-    def get_repository_url(self, package_name: str) -> str | None:
+    def get_repository_url(
+        self, package_name: str, github_context: str | None = None
+    ) -> str | None:
         """Attempt to extract repository URL for a package.
 
-        This method tries to find a git URL in the existing dependency
-        specification. For PyPI packages, it would need external lookup.
+        This method tries multiple approaches:
+        1. Find git URL in existing dependency specification
+        2. Look up in curated list of common packages
+        3. Use importlib.metadata to find project URLs
+        4. Extract from GitHub issue URL context (if available)
 
         Args:
             package_name: Name of the package
+            github_context: GitHub issue/PR URL for context hints
 
         Returns:
             Repository URL if found, None otherwise
         """
         dependencies = self._metadata.get("dependencies", [])
 
+        # Method 1: Check existing git dependencies
         for dep in dependencies:
             if extract_package_name(dep) == package_name and "@git+" in dep:
                 # Extract the git URL
@@ -131,8 +142,26 @@ class ScriptParser:
                 git_url = git_part.split("@")[0] if "@" in git_part else git_part
                 return f"git+{git_url}"
 
-        # TODO: Implement PyPI metadata lookup for repository URL
-        # For now, return None to require manual specification
+        # Method 2: Curated list of common scientific Python packages
+        from .repository_mappings import get_repository_url as get_curated_repo
+
+        repo_url = get_curated_repo(package_name)
+        if repo_url:
+            return repo_url
+
+        # Method 3: Try extracting from GitHub context
+        if github_context:
+            context_repo = self._get_repo_from_github_context(
+                package_name, github_context
+            )
+            if context_repo:
+                return context_repo
+
+        # Method 4: Try importlib.metadata
+        repo_url = self._get_repo_from_metadata(package_name)
+        if repo_url:
+            return repo_url
+
         return None
 
     def update_git_reference(
@@ -252,3 +281,136 @@ class ScriptParser:
             warnings.append("'requires-python' field must be a string")
 
         return warnings
+
+    def _get_repo_from_metadata(self, package_name: str) -> str | None:
+        """Try to extract repository URL from package metadata using importlib.
+
+        Args:
+            package_name: Name of the package to look up
+
+        Returns:
+            Repository URL if found, None otherwise
+        """
+        try:
+            import importlib.metadata as metadata
+
+            # Get package metadata
+            dist = metadata.distribution(package_name)
+
+            # Check common URL fields that might contain the repository
+            project_urls = dist.metadata.get_all("Project-URL") or []
+            home_page = dist.metadata.get("Home-page")
+
+            # Look for repository URLs in project URLs
+            for url_entry in project_urls:
+                if isinstance(url_entry, str) and ", " in url_entry:
+                    label, url = url_entry.split(", ", 1)
+                    label = label.lower()
+                    if any(
+                        keyword in label
+                        for keyword in [
+                            "source",
+                            "repository",
+                            "repo",
+                            "code",
+                            "github",
+                        ]
+                    ) and self._is_valid_git_repo_url(url):
+                        return url
+
+            # Check home page as fallback
+            if home_page and self._is_valid_git_repo_url(home_page):
+                return home_page
+
+        except (metadata.PackageNotFoundError, ImportError, ValueError):
+            # Package not installed or importlib.metadata not available
+            pass
+
+        return None
+
+    def _is_valid_git_repo_url(self, url: str) -> bool:
+        """Check if a URL looks like a valid git repository URL.
+
+        Args:
+            url: URL to check
+
+        Returns:
+            True if URL appears to be a git repository
+        """
+        try:
+            parsed = urlparse(url)
+
+            # Check for GitHub, GitLab, Bitbucket, or other git hosting
+            git_hosts = [
+                "github.com",
+                "gitlab.com",
+                "bitbucket.org",
+                "codeberg.org",
+                "git.sr.ht",
+            ]
+
+            return bool(
+                parsed.scheme in ("https", "http", "git")
+                and any(host in parsed.netloc for host in git_hosts)
+                and parsed.path.strip("/")  # has a path
+            )
+        except Exception:
+            return False
+
+    def _get_repo_from_github_context(
+        self, package_name: str, github_url: str
+    ) -> str | None:
+        """Try to extract repository URL from GitHub issue context.
+
+        If the GitHub issue is from the same repository as the package being bisected,
+        we can use that repository URL directly.
+
+        Args:
+            package_name: Name of the package to look up
+            github_url: GitHub issue/PR URL for context
+
+        Returns:
+            Repository URL if contextually relevant, None otherwise
+        """
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(github_url)
+            if parsed.hostname not in ("github.com", "www.github.com"):
+                return None
+
+            # Extract owner/repo from path like /owner/repo/issues/123
+            path_parts = parsed.path.strip("/").split("/")
+            if len(path_parts) < 2:
+                return None
+
+            owner, repo = path_parts[0], path_parts[1]
+            repo_url = f"https://github.com/{owner}/{repo}"
+
+            # Heuristic: if the repo name matches the package name or contains it,
+            # it's likely the same project
+            if (
+                package_name.lower() == repo.lower()
+                or package_name.replace("-", "").replace("_", "").lower()
+                == repo.replace("-", "").replace("_", "").lower()
+                or package_name.lower() in repo.lower()
+                or repo.lower() in package_name.lower()
+            ):
+                return repo_url
+
+            # Additional heuristic: check for common package/repo name patterns
+            package_variations = {
+                package_name.replace("-", "_"),
+                package_name.replace("_", "-"),
+                f"{package_name}-python",
+                f"python-{package_name}",
+                f"{package_name}.py",
+            }
+
+            if any(var.lower() == repo.lower() for var in package_variations):
+                return repo_url
+
+        except Exception as e:
+            logger.warning("Failed to parse repository URL: %s", e, exc_info=True)
+
+        return None

@@ -53,7 +53,8 @@ def safe_filename(name: str) -> str:
     # Replace problematic characters
     safe_chars = []
     for char in name:
-        if char.isalnum() or char in "-_.":
+        # Only allow ASCII alphanumeric characters and specific symbols
+        if (char.isascii() and char.isalnum()) or char in "-_.":
             safe_chars.append(char)
         else:
             safe_chars.append("_")

@@ -32,6 +32,7 @@ def test_xarray_bisection_finds_correct_commit():
             good_ref,
             bad_ref,
             "--verbose",
+            "--yes",
         ]
 
         result = subprocess.run(
@@ -88,6 +89,7 @@ def test_bisection_dry_run_mode():
             "v2025.09.0",
             "--dry-run",
             "--verbose",
+            "--yes",
         ]
 
         result = subprocess.run(
