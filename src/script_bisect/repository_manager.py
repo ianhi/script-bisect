@@ -76,7 +76,7 @@ class RepositoryManager:
             logger.info("Using cached repository, updating with latest refs...")
             # Copy cached repository to a temporary location for use
             self.clone_dir = Path(tempfile.mkdtemp(prefix="script_bisect_repo_"))
-            shutil.copytree(cached_repo, self.clone_dir)
+            shutil.copytree(cached_repo, self.clone_dir, dirs_exist_ok=True)
             self.repo = git.Repo(self.clone_dir)
 
             # Update the cached repo with latest refs to catch new commits
