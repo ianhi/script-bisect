@@ -17,6 +17,31 @@ Bisect package versions in PEP 723 Python scripts using git bisect and uv.
 
 Perfect for debugging package regressions, testing new features, and creating reliable bug reports.
 
+### Super Quick Start 🚀
+
+Point script-bisect directly at a real GitHub issue:
+
+```bash
+# Bisect a real xarray issue directly from GitHub
+uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray v2025.07.1 v2025.08.0
+```
+
+That's it! script-bisect will:
+
+1. **Extract** the code from the GitHub issue
+2. **Create** a test script automatically
+3. **Detect** the package and repository
+4. **Run** the bisection to find the problematic commit
+
+For xarray issue [#10712](https://github.com/pydata/xarray/issues/10712), this will show you exactly which commit introduced the regression!
+
+You can also omit the REFs and fill them in using using the UI
+
+```bash
+# Bisect a real xarray issue directly from GitHub
+uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray
+```
+
 ## Installation
 
 ### Using uvx (Recommended)
@@ -44,21 +69,6 @@ uv run script-bisect --help
 ## Quick Start
 
 ### Try It Now! 🚀
-
-Point script-bisect directly at a real GitHub issue:
-
-```bash
-# Bisect a real xarray issue directly from GitHub
-uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray v2025.07.1 v2025.08.0
-```
-
-That's it! script-bisect will:
-1. **Extract** the code from the GitHub issue
-2. **Create** a test script automatically
-3. **Detect** the package and repository
-4. **Run** the bisection to find the problematic commit
-
-For xarray issue [#10712](https://github.com/pydata/xarray/issues/10712), this will show you exactly which commit introduced the regression!
 
 ### Manual Script Method
 
@@ -274,29 +284,34 @@ script-bisect includes a smart caching system for better performance:
 - **Force Refresh**: Use `--refresh-cache` to bypass cache and fetch fresh data
 
 Cache locations follow XDG Base Directory standards:
+
 - Linux/macOS: `~/.cache/script-bisect/`
 - Windows: `%LOCALAPPDATA%\script-bisect\cache\`
 
 ## How It Works
 
 ### 1. Script Analysis
+
 - Parses PEP 723 metadata from your script
 - Validates package dependencies and requirements
 - Auto-detects repository URLs for PyPI packages using multiple sources
 
 ### 2. Repository Management
+
 - Clones the package repository (with intelligent caching)
 - Validates that good/bad references exist
 - Updates cached repositories with latest commits
 - Manages cleanup automatically (unless `--keep-clone` is used)
 
 ### 3. Bisection Process
+
 - Uses `git bisect run` with an automated test script
 - For each commit, updates your script's dependency reference
 - Runs `uv run script.py` to test the specific commit
 - Returns appropriate exit codes for git bisect (0=good, 1=bad, 125=skip)
 
 ### 4. Result Reporting
+
 - Identifies the exact problematic commit
 - Shows commit details (author, date, message)
 - Provides GitHub/GitLab links when possible
@@ -307,18 +322,22 @@ Cache locations follow XDG Base Directory standards:
 ### Common Issues
 
 **"Package not found in dependencies"**
+
 - Ensure the package name matches exactly what's in your dependencies list
 - Use `--verbose` to see available packages
 
 **"Could not auto-detect repository URL"**
+
 - Use `--repo-url` to specify the repository manually
 - Ensure the package has repository metadata on PyPI
 
 **"uv not found"**
+
 - Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Ensure uv is in your PATH
 
 **Test always fails/passes**
+
 - Check your script logic with `--dry-run`
 - Use `--verbose` to see test output
 - Verify your script correctly demonstrates the issue
