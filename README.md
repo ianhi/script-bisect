@@ -49,7 +49,7 @@ Point script-bisect directly at a real GitHub issue:
 
 ```bash
 # Bisect a real xarray issue directly from GitHub
-uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray
+uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray v2025.07.1 v2025.08.0
 ```
 
 That's it! script-bisect will:
