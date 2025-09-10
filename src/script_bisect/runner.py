@@ -42,9 +42,27 @@ class TestRunner:
 
         self.parser = ScriptParser(script_path)
         self.dependency_fixer = AutoDependencyFixer()
+        self.managed_script_path = self._create_managed_script()
+
+    def _create_managed_script(self) -> Path:
+        """Create a managed copy of the user's script in a temporary location."""
+        try:
+            # Create a temporary file with a descriptive name
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=f"_managed_{self.script_path.name}",
+                delete=False,
+                encoding="utf-8",
+            ) as temp_file:
+                # Read original content and write to the new file
+                original_content = self.script_path.read_text(encoding="utf-8")
+                temp_file.write(original_content)
+                return Path(temp_file.name)
+        except Exception as e:
+            raise ExecutionError(f"Failed to create managed script: {e}") from e
 
     def test_commit(self, commit_hash: str) -> bool:
-        """Test a specific commit.
+        """Test a specific commit by updating the managed script.
 
         Args:
             commit_hash: The git commit hash to test
@@ -58,35 +76,37 @@ class TestRunner:
         logger.debug(f"Testing commit {commit_hash[:12]}")
 
         try:
-            # Create modified script with the specific commit
-            modified_content = self.parser.update_git_reference(
+            # Create a temporary parser for the current managed script state
+            # This preserves any dependency fixes that have been applied
+            current_content = self.managed_script_path.read_text(encoding="utf-8")
+            temp_parser = ScriptParser.from_content(current_content)
+            
+            # Update the git reference using the current state
+            updated_content = temp_parser.update_git_reference(
                 self.package, self.repo_url, commit_hash
             )
+            
+            # Write the updated content back to the managed script
+            self.managed_script_path.write_text(updated_content, encoding="utf-8")
 
-            # Write to temporary file
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".py", delete=False, encoding="utf-8"
-            ) as temp_file:
-                temp_file.write(modified_content)
-                temp_script_path = Path(temp_file.name)
-
-            try:
-                # Run the test
-                success = self._run_test(temp_script_path)
-                logger.debug(
-                    f"Commit {commit_hash[:12]} test result: {'PASS' if success else 'FAIL'}"
-                )
-                return success
-
-            finally:
-                # Clean up temporary file
-                try:
-                    temp_script_path.unlink()
-                except Exception as e:
-                    logger.warning(f"Failed to cleanup temp file: {e}")
+            # Run the test on the managed script
+            success = self._run_test(self.managed_script_path)
+            logger.debug(
+                f"Commit {commit_hash[:12]} test result: {'PASS' if success else 'FAIL'}"
+            )
+            return success
 
         except Exception as e:
             raise ExecutionError(f"Failed to test commit {commit_hash}: {e}") from e
+
+    def cleanup(self) -> None:
+        """Clean up the managed script file."""
+        try:
+            if self.managed_script_path.exists():
+                self.managed_script_path.unlink()
+                logger.debug(f"Cleaned up managed script: {self.managed_script_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up managed script: {e}")
 
     def _run_test(self, script_path: Path) -> bool:
         """Run the test for a script with automatic dependency fixing.
@@ -97,115 +117,86 @@ class TestRunner:
         Returns:
             True if test passes, False otherwise
         """
-        current_script = script_path
         max_retries = 3  # Prevent infinite loops
         retries = 0
-        previous_temp_script = None  # Track previous temp script for cleanup
 
-        try:
-            while retries <= max_retries:
-                if self.test_command:
-                    # Use custom test command
-                    command = self.test_command.format(script=current_script)
-                    cmd = command.split()
-                else:
-                    # Default: uv run script
-                    cmd = ["uv", "run", str(current_script)]
+        while retries <= max_retries:
+            if self.test_command:
+                # Use custom test command
+                command = self.test_command.format(script=script_path)
+                cmd = command.split()
+            else:
+                # Default: uv run script
+                cmd = ["uv", "run", str(script_path)]
 
-                try:
-                    logger.debug(f"Running command: {' '.join(cmd)}")
+            try:
+                logger.debug(f"Running command: {' '.join(cmd)}")
 
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        timeout=self.timeout,
-                        check=False,  # Don't raise on non-zero exit
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                    check=False,  # Don't raise on non-zero exit
+                )
+
+                # Log output for debugging
+                if result.stdout:
+                    logger.debug(f"STDOUT: {result.stdout[:500]}")
+                if result.stderr:
+                    logger.debug(f"STDERR: {result.stderr[:500]}")
+
+                # If test passes, we're done
+                if result.returncode == 0:
+                    return True
+
+                # If test fails, check for dependency issues (allow multiple rounds)
+                if retries < max_retries:
+                    error_output = result.stdout + "\n" + result.stderr
+
+                    _, should_retry = self.dependency_fixer.fix_and_retry(
+                        script_path, error_output
                     )
 
-                    # Log output for debugging
+                    if should_retry:
+                        retries += 1
+                        continue  # Retry with fixed script
+
+                # Test failed and no more retries - show failure output for debugging
+                if result.stdout or result.stderr:
+                    from rich.console import Console
+
+                    console = Console()
+                    console.print(
+                        f"[red]💥 Test failed (exit code {result.returncode})[/red]"
+                    )
                     if result.stdout:
-                        logger.debug(f"STDOUT: {result.stdout[:500]}")
-                    if result.stderr:
-                        logger.debug(f"STDERR: {result.stderr[:500]}")
-
-                    # If test passes, we're done
-                    if result.returncode == 0:
-                        return True
-
-                    # If test fails, check for dependency issues (allow multiple rounds)
-                    if retries < max_retries:
-                        error_output = result.stdout + "\n" + result.stderr
-
-                        fixed_script, should_retry = (
-                            self.dependency_fixer.fix_and_retry(
-                                current_script, error_output
-                            )
-                        )
-
-                        if should_retry and fixed_script:
-                            # Clean up previous temp script if it exists
-                            if (
-                                previous_temp_script
-                                and previous_temp_script != script_path
-                            ):
-                                self.dependency_fixer.cleanup_temp_script(
-                                    previous_temp_script, script_path
-                                )
-
-                            # Track current script for potential cleanup next iteration
-                            if current_script != script_path:
-                                previous_temp_script = current_script
-
-                            current_script = fixed_script
-                            retries += 1
-                            continue  # Retry with fixed script
-
-                    # Test failed and no more retries - show failure output for debugging
-                    if result.stdout or result.stderr:
-                        from rich.console import Console
-
-                        console = Console()
+                        console.print("[yellow]📤 STDOUT:[/yellow]")
                         console.print(
-                            f"[red]💥 Test failed (exit code {result.returncode})[/red]"
+                            result.stdout[:1000]
+                            + ("..." if len(result.stdout) > 1000 else "")
                         )
-                        if result.stdout:
-                            console.print("[yellow]📤 STDOUT:[/yellow]")
-                            console.print(
-                                result.stdout[:1000]
-                                + ("..." if len(result.stdout) > 1000 else "")
-                            )
-                        if result.stderr:
-                            console.print("[yellow]📤 STDERR:[/yellow]")
-                            console.print(
-                                result.stderr[:1000]
-                                + ("..." if len(result.stderr) > 1000 else "")
-                            )
+                    if result.stderr:
+                        console.print("[yellow]📤 STDERR:[/yellow]")
+                        console.print(
+                            result.stderr[:1000]
+                            + ("..." if len(result.stderr) > 1000 else "")
+                        )
 
-                    return False
+                return False
 
-                except subprocess.TimeoutExpired:
-                    logger.warning(f"Test timed out after {self.timeout} seconds")
-                    return False
-                except FileNotFoundError as e:
-                    if "uv" in str(e):
-                        raise ExecutionError(
-                            "uv not found. Please install uv (https://docs.astral.sh/uv/)"
-                        ) from e
-                    raise ExecutionError(f"Command not found: {e}") from e
-                except Exception as e:
-                    logger.warning(f"Test execution failed: {e}")
-                    return False
-
-        finally:
-            # Clean up any remaining temp scripts
-            if previous_temp_script and previous_temp_script != script_path:  # type: ignore
-                self.dependency_fixer.cleanup_temp_script(
-                    previous_temp_script, script_path
-                )
-            if current_script != script_path and current_script != previous_temp_script:  # type: ignore
-                self.dependency_fixer.cleanup_temp_script(current_script, script_path)
-
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Test timed out after {self.timeout} seconds")
+                return False
+            except FileNotFoundError as e:
+                if "uv" in str(e):
+                    raise ExecutionError(
+                        "uv not found. Please install uv (https://docs.astral.sh/uv/)"
+                    ) from e
+                raise ExecutionError(f"Command not found: {e}") from e
+            except Exception as e:
+                logger.warning(f"Test execution failed: {e}")
+                return False
         return False
 
     def validate_test_setup(self) -> bool:

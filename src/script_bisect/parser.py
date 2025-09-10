@@ -39,6 +39,26 @@ class ScriptParser:
         self._content = self._read_script()
         self._metadata = self._parse_metadata()
 
+    @classmethod
+    def from_content(cls, content: str) -> "ScriptParser":
+        """Create a ScriptParser from script content rather than a file.
+        
+        Args:
+            content: The script content with PEP 723 metadata
+            
+        Returns:
+            ScriptParser instance
+            
+        Raises:
+            ParseError: If the content contains invalid metadata
+        """
+        # Create a temporary instance
+        instance = cls.__new__(cls)
+        instance.script_path = None  # No file path for content-based parser
+        instance._content = content
+        instance._metadata = instance._parse_metadata()
+        return instance
+
     def _read_script(self) -> str:
         """Read the script file content.
 
@@ -242,7 +262,8 @@ class ScriptParser:
             match.group(1) + "\n".join(commented_lines) + "\n" + match.group(3)
         )
 
-        return self._content.replace(match.group(0), new_metadata_block)
+        modified_content = self._content.replace(match.group(0), new_metadata_block)
+        return modified_content
 
     def get_dependency_spec(self, package_name: str) -> str | None:
         """Get the full dependency specification for a package.

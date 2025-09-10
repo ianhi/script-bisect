@@ -207,17 +207,14 @@ class AutoDependencyFixer:
         # Add rest of metadata and script content
         new_lines.extend(lines[skip_until:])
 
-        # Create temporary file with fixed dependencies
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, encoding="utf-8"
-        ) as f:
-            f.write("\n".join(new_lines))
-            fixed_script_path = Path(f.name)
-
-        console.print(
-            f"[green]✅ Created fixed script: {fixed_script_path.name}[/green]"
-        )
-        return fixed_script_path
+        # Write the modified content back to the original file
+        try:
+            script_path.write_text("\n".join(new_lines), encoding="utf-8")
+            console.print(f"[green]✅ Updated script: {script_path.name}[/green]")
+            return script_path
+        except OSError as e:
+            console.print(f"[red]❌ Failed to write to script: {e}[/red]")
+            return script_path
 
     def should_retry_with_fixes(self, error_output: str) -> bool:
         """Check if the error output indicates we should retry with dependency fixes.
@@ -252,30 +249,7 @@ class AutoDependencyFixer:
             f"[cyan]🔄 Attempting to fix {len(fixes)} dependency issue(s)...[/cyan]"
         )
 
-        fixed_script = self.apply_dependency_fixes(script_path, fixes)
+        self.apply_dependency_fixes(script_path, fixes)
 
-        if fixed_script != script_path:
-            console.print("[cyan]🔄 Re-running test with fixed dependencies...[/cyan]")
-            return fixed_script, True
-
-        return None, False
-
-    def cleanup_temp_script(
-        self, script_path: Path, original_script_path: Path
-    ) -> None:
-        """Clean up temporary script if it's not the original.
-
-        Args:
-            script_path: Path to potentially temporary script
-            original_script_path: Path to original script
-        """
-        if script_path != original_script_path and script_path.exists():
-            try:
-                script_path.unlink()
-                console.print(
-                    f"[dim]🗑️ Cleaned up temporary script: {script_path.name}[/dim]"
-                )
-            except OSError:
-                console.print(
-                    f"[yellow]⚠️ Could not remove temporary script: {script_path}[/yellow]"
-                )
+        console.print("[cyan]🔄 Re-running test with fixed dependencies...[/cyan]")
+        return script_path, True
