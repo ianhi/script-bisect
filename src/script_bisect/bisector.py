@@ -107,10 +107,12 @@ class GitBisector:
             RepositoryError: If there's an error with the repository
         """
         start_time = time.time()
-        
+
         try:
             # Step 1: Set up optimized repository
-            self.clone_dir = self.repo_manager.setup_repository(self.good_ref, self.bad_ref)
+            self.clone_dir = self.repo_manager.setup_repository(
+                self.good_ref, self.bad_ref
+            )
             self.repo = self.repo_manager.repo
 
             # Step 2: Validate refs
@@ -136,7 +138,6 @@ class GitBisector:
 
         finally:
             self._cleanup()
-
 
     def _validate_refs(self) -> None:
         """Validate that the good and bad refs exist in the repository."""
@@ -167,7 +168,9 @@ class GitBisector:
 
         try:
             # Use repository manager to get commit range efficiently
-            commit_shas = self.repo_manager.get_commit_range(self.good_ref, self.bad_ref)
+            commit_shas = self.repo_manager.get_commit_range(
+                self.good_ref, self.bad_ref
+            )
 
             if not commit_shas:
                 raise GitError(
@@ -231,7 +234,7 @@ class GitBisector:
                     console.print(
                         f"[red]❌ Good ref '{self.good_ref}' is not actually good![/red]"
                     )
-                    return None
+                    return None, 0
                 elif good_result is None:
                     console.print(
                         f"[yellow]⚠️ Could not test good ref '{self.good_ref}' - continuing anyway[/yellow]"
@@ -247,7 +250,7 @@ class GitBisector:
                     console.print(
                         f"[red]❌ Bad ref '{self.bad_ref}' is not actually bad![/red]"
                     )
-                    return None
+                    return None, 0
                 elif bad_result is None:
                     console.print(
                         f"[yellow]⚠️ Could not test bad ref '{self.bad_ref}' - continuing anyway[/yellow]"
@@ -260,6 +263,7 @@ class GitBisector:
             # Run binary search
             console.print("\n[bold blue]🔄 Starting binary search...[/bold blue]")
             first_bad_commit = self._binary_search_commits(commits)
+            commits_tested = len(commits)  # Placeholder - will be improved later
 
             if first_bad_commit:
                 commit_info = {
@@ -289,12 +293,12 @@ class GitBisector:
                     )
                 )
 
-                return commit_info
+                return commit_info, commits_tested
             else:
                 console.print(
                     "\n[yellow]⚠️ Could not find a clear first bad commit[/yellow]"
                 )
-                return None
+                return None, commits_tested
 
         except Exception as e:
             logger.error(f"Bisection failed: {e}")
@@ -368,6 +372,22 @@ class GitBisector:
             )
 
         return first_bad
+
+    def _show_performance_report(self, start_time: float, commits_tested: int) -> None:
+        """Show performance report with commits tested and time taken."""
+        elapsed_time = time.time() - start_time
+
+        # Format time display
+        if elapsed_time < 60:
+            time_str = f"{elapsed_time:.1f} seconds"
+        elif elapsed_time < 3600:
+            minutes = elapsed_time / 60
+            time_str = f"{minutes:.1f} minutes"
+        else:
+            hours = elapsed_time / 3600
+            time_str = f"{hours:.1f} hours"
+
+        console.print(f"\n[dim]⏱️ Tested {commits_tested} commits in {time_str}[/dim]")
 
     def _cleanup(self) -> None:
         """Clean up resources after bisection."""
