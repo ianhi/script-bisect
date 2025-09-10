@@ -80,7 +80,6 @@ jobs:
 
   publish-to-pypi:
     name: Publish to PyPI 🚀
-    if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'rc') && !contains(github.ref, 'a') && !contains(github.ref, 'b')
     needs: [build, install-test-ubuntu]
     runs-on: ubuntu-latest
     environment:
@@ -102,7 +101,7 @@ jobs:
     name: Upload to GitHub Release 📋
     needs: [build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: always()
     permissions:
       contents: write  # IMPORTANT: mandatory for making GitHub Releases
       id-token: write  # IMPORTANT: mandatory for sigstore
