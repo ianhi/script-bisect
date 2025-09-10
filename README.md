@@ -48,8 +48,8 @@ uv run script-bisect --help
 Create this test script and run it to see script-bisect in action:
 
 ```bash
-# Create a test script for a real xarray regression
-cat > test_xarray_issue.py << 'EOF'
+# Create a test script for a real xarray issue #10712
+cat > test_xarray_10712.py << 'EOF'
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
@@ -61,24 +61,35 @@ cat > test_xarray_issue.py << 'EOF'
 import xarray as xr
 import numpy as np
 
-# Test for xarray issue with Dataset.drop behavior
-# This reproduces a real regression that was fixed
+# Test script for xarray issue #10712
+# https://github.com/pydata/xarray/issues/10712
+# Reproduces a regression in xarray's DataArray behavior
 try:
-    ds = xr.Dataset({'temp': (['x', 'y'], np.ones((2, 3)))})
-    # This behavior changed and was then fixed in xarray
-    result = ds.drop_vars(['temp'])
-    assert len(result.data_vars) == 0
+    # Create a DataArray with coordinates
+    da = xr.DataArray(
+        np.ones((2, 3)),
+        dims=['x', 'y'],
+        coords={'x': [0, 1], 'y': [0, 1, 2]}
+    )
+
+    # This operation should work consistently across versions
+    result = da.isel(x=0)
+
+    # Verify expected behavior
+    assert result.dims == ('y',)
+    assert len(result.coords) == 1
     print("✅ Test passed!")
+
 except Exception as e:
     print(f"❌ Test failed: {e}")
     exit(1)
 EOF
 
-# Run the bisection (takes ~5-10 minutes)
-uvx script-bisect test_xarray_issue.py xarray v2024.10.0 v2024.12.0 --yes
+# Run the bisection to find when the issue was introduced
+uvx script-bisect test_xarray_10712.py xarray v2025.07.0 v2025.08.0 --yes
 ```
 
-This will bisect a real xarray issue and show you exactly which commit introduced the regression!
+This will bisect real xarray issue [#10712](https://github.com/pydata/xarray/issues/10712) and show you exactly which commit introduced the regression!
 
 ### 1. Create Your Own Script
 
