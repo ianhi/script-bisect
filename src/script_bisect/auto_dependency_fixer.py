@@ -30,6 +30,15 @@ class DependencyFix(NamedTuple):
 class AutoDependencyFixer:
     """Automatically detects and fixes missing dependencies during bisection."""
 
+    def __init__(self, quiet_mode: bool = False) -> None:
+        """Initialize the dependency fixer.
+
+        Args:
+            quiet_mode: If True, suppress console output during operation
+        """
+        self.quiet_mode = quiet_mode
+        self._pending_messages: list[str] = []
+
     # General patterns for detecting missing dependencies
     GENERAL_PATTERNS = [
         # Standard import errors - captures package name from error
@@ -139,10 +148,10 @@ class AutoDependencyFixer:
                     )
                     fixes_needed.append(fix)
                     detected_packages.add(mapped_package)
-                    console.print(
+                    self._print_or_queue(
                         f"[yellow]🔧 Detected missing dependency: {mapped_package}[/yellow]"
                     )
-                    console.print(f"[dim]   Reason: {fix.reason}[/dim]")
+                    self._print_or_queue(f"[dim]   Reason: {fix.reason}[/dim]")
 
         # Finally, try domain-specific interpreters for application errors
         for pattern, package_template, reason_template in self.DOMAIN_INTERPRETERS:
@@ -173,10 +182,10 @@ class AutoDependencyFixer:
                     )
                     fixes_needed.append(fix)
                     detected_packages.add(package_name)
-                    console.print(
+                    self._print_or_queue(
                         f"[yellow]🔧 Detected missing dependency: {package_name}[/yellow]"
                     )
-                    console.print(f"[dim]   Reason: {fix.reason}[/dim]")
+                    self._print_or_queue(f"[dim]   Reason: {fix.reason}[/dim]")
 
         return fixes_needed
 
@@ -247,7 +256,9 @@ class AutoDependencyFixer:
                 dependencies_line = i
 
         if metadata_start is None or metadata_end is None:
-            console.print("[red]❌ No PEP 723 metadata block found in script[/red]")
+            self._print_or_queue(
+                "[red]❌ No PEP 723 metadata block found in script[/red]"
+            )
             return script_path
 
         # Extract existing dependencies
@@ -311,7 +322,7 @@ class AutoDependencyFixer:
             # Script update message removed for cleaner output
             return script_path
         except OSError as e:
-            console.print(f"[red]❌ Failed to write to script: {e}[/red]")
+            self._print_or_queue(f"[red]❌ Failed to write to script: {e}[/red]")
             return script_path
 
     def should_retry_with_fixes(self, error_output: str) -> bool:
@@ -345,9 +356,22 @@ class AutoDependencyFixer:
 
         # Show consolidated dependency fix message
         dep_names = [fix.package_name for fix in fixes]
-        console.print(
+        self._print_or_queue(
             f"[cyan]🔧 Auto-fixing dependencies: {', '.join(dep_names)}[/cyan]"
         )
 
         self.apply_dependency_fixes(script_path, fixes)
         return script_path, True
+
+    def _print_or_queue(self, message: str) -> None:
+        """Print a message or queue it for later if in quiet mode."""
+        if self.quiet_mode:
+            self._pending_messages.append(message)
+        else:
+            console.print(message)
+
+    def flush_messages(self) -> list[str]:
+        """Return and clear all pending messages."""
+        messages = self._pending_messages.copy()
+        self._pending_messages.clear()
+        return messages

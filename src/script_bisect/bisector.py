@@ -397,6 +397,12 @@ class GitBisector:
                     first_bad = commit
                     right = mid - 1
 
+                # Show any queued dependency messages
+                if self.test_runner:
+                    dep_messages = self.test_runner.flush_dependency_messages()
+                    for message in dep_messages:
+                        console.print(f"    {message}")
+
             progress.update(
                 task, description="✨ Bisection complete!", completed=total_steps
             )

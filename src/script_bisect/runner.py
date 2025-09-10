@@ -43,7 +43,7 @@ class TestRunner:
         self.full_traceback = full_traceback
 
         self.parser = ScriptParser(script_path)
-        self.dependency_fixer = AutoDependencyFixer()
+        self.dependency_fixer = AutoDependencyFixer(quiet_mode=True)
         self.managed_script_path = self._create_managed_script()
 
     def _create_managed_script(self) -> Path:
@@ -354,3 +354,7 @@ class TestRunner:
             subprocess.TimeoutExpired,
         ):
             return False
+
+    def flush_dependency_messages(self) -> list[str]:
+        """Flush and return any queued dependency messages."""
+        return self.dependency_fixer.flush_messages()
