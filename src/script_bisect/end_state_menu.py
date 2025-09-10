@@ -4,8 +4,6 @@ This module provides interactive options after a bisection completes,
 allowing users to re-run with different references, scripts, or parameters.
 """
 
-import os
-import subprocess
 from pathlib import Path
 
 from rich.console import Console
@@ -200,8 +198,9 @@ def _rerun_with_different_script(
 
                 # Use the consolidated editor integration
                 from .editor_integration import EditorIntegration
+
                 editor = EditorIntegration()
-                
+
                 try:
                     opened = editor.launch_editor(script_path)
                 except Exception:

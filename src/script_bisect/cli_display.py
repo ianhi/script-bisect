@@ -104,7 +104,9 @@ def confirm_bisection_params(
             console.print("\nStart bisection? yes (auto-confirmed)")
             return True, current_params
 
-        console.print("\n[dim]Press the highlighted key to edit that parameter, or:[/dim]")
+        console.print(
+            "\n[dim]Press the highlighted key to edit that parameter, or:[/dim]"
+        )
         console.print("  [green]Enter/y[/green] - Start bisection")
         console.print("  [red]n/q[/red] - Cancel")
 
@@ -123,13 +125,16 @@ def confirm_bisection_params(
 
                 # Use the consolidated editor integration
                 from .editor_integration import EditorIntegration
+
                 editor = EditorIntegration()
-                
+
                 try:
                     if editor.launch_editor(script_path):
                         console.print("[green]✓[/green] Script editor opened")
                     else:
-                        console.print("[yellow]Could not open editor automatically[/yellow]")
+                        console.print(
+                            "[yellow]Could not open editor automatically[/yellow]"
+                        )
                         console.print(f"[dim]Please manually edit: {script_path}[/dim]")
                 except Exception as e:
                     console.print(f"[yellow]Could not open editor: {e}[/yellow]")

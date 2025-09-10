@@ -29,7 +29,7 @@ class EditorIntegration:
             result = subprocess.run(
                 ["git", "config", "--global", "core.editor"],
                 capture_output=True,
-                text=True
+                text=True,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
@@ -60,7 +60,7 @@ class EditorIntegration:
 
     # Removed complex editor selection methods - now using git-based approach
 
-    def launch_editor(self, file_path: Path, read_only: bool = False) -> bool:
+    def launch_editor(self, file_path: Path, _read_only: bool = False) -> bool:
         """Launch an external editor to edit a file using git's configured editor.
 
         Args:
@@ -84,7 +84,7 @@ class EditorIntegration:
 
         try:
             # Launch editor and wait for completion (all terminal editors are blocking)
-            result = subprocess.run([editor, str(file_path)])
+            subprocess.run([editor, str(file_path)])
             # For terminal editors, any exit is considered success
             # (user may exit without saving, that's their choice)
             console.print("[green]✅ Editor session completed[/green]")

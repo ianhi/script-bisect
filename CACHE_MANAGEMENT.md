@@ -14,7 +14,7 @@ The cache follows XDG Base Directory standards:
 ```
 ~/.cache/script-bisect/
 ├── repositories/        # Git repository clones (TTL: 1 week)
-├── references/         # Git refs (tags/branches) (TTL: 6 hours) 
+├── references/         # Git refs (tags/branches) (TTL: 6 hours)
 ├── metadata/           # PyPI package metadata (TTL: 24 hours)
 └── scripts/            # Script parsing info (TTL: 1 hour)
 ```
@@ -75,7 +75,7 @@ This clears all caches before starting the bisection, ensuring:
 
 ### Before Caching
 - Repository clone: ~30-60 seconds
-- Git reference fetch: ~2-5 seconds  
+- Git reference fetch: ~2-5 seconds
 - Package metadata lookup: ~1-3 seconds
 - **Total cold start**: ~35-70 seconds
 
@@ -142,7 +142,7 @@ Total size: 12.30 MB
 ### Monitor Growth
 Run `stats` periodically to ensure cache isn't growing too large. A reasonable cache size is:
 - **Small projects**: 50-200 MB
-- **Large projects**: 200-500 MB  
+- **Large projects**: 200-500 MB
 - **Many repositories**: 500-1000 MB
 
 If cache exceeds 1GB, consider running cleanup or clearing specific cache types.

@@ -236,12 +236,12 @@ The latest major update focuses on user experience improvements and interactive 
    ```
    🔄 Bisection Summary
    [s] 📄 Script     test_script.py
-   [p] 📦 Package    xarray  
+   [p] 📦 Package    xarray
    [g] ✅ Good ref   v2024.01.0
    [b] ❌ Bad ref    v2024.03.0
    [t] 🧪 Test command uv run test_script.py
    [i] 🔄 Mode       Normal (find when broken)
-   
+
    Press the highlighted key to edit that parameter, or:
      Enter/y - Start bisection
      n/q - Cancel

@@ -189,13 +189,16 @@ def main(
 
     try:
         print_banner()
-        
+
         # Handle cache refresh if requested
         if refresh_cache:
             from .cache_system import clear_global_cache
+
             console.print("[yellow]🗂️ Refreshing cached data...[/yellow]")
             clear_global_cache()
-            console.print("[green]✅ Cache cleared - fresh data will be fetched[/green]")
+            console.print(
+                "[green]✅ Cache cleared - fresh data will be fetched[/green]"
+            )
 
         # Auto-detect source type
         if _is_github_url(source):

@@ -69,7 +69,7 @@ class RepositoryManager:
             git.GitCommandError: If any Git operation fails
         """
         cache = get_cache()
-        
+
         # Check if we have a cached repository
         cached_repo = cache.cache_repository(self.repo_url, good_ref, bad_ref)
         if cached_repo:
@@ -78,7 +78,7 @@ class RepositoryManager:
             self.clone_dir = Path(tempfile.mkdtemp(prefix="script_bisect_repo_"))
             shutil.copytree(cached_repo, self.clone_dir)
             self.repo = git.Repo(self.clone_dir)
-            
+
             # Update the cached repo with latest refs to catch new commits
             try:
                 logger.debug("Fetching latest refs to update cache...")
@@ -86,13 +86,15 @@ class RepositoryManager:
                 self.repo.git.fetch("origin", good_ref, bad_ref, "--filter=blob:none")
                 try:
                     # Also try to fetch the range to get any new commits
-                    self.repo.git.fetch("origin", f"{good_ref}..{bad_ref}", "--filter=blob:none")
+                    self.repo.git.fetch(
+                        "origin", f"{good_ref}..{bad_ref}", "--filter=blob:none"
+                    )
                 except git.GitCommandError:
                     logger.debug("Range fetch failed, using individual refs")
             except git.GitCommandError as e:
                 logger.warning(f"Failed to update cached repository: {e}")
                 # Continue with cached version if update fails
-            
+
             return self.clone_dir
 
         with Progress(
@@ -165,10 +167,12 @@ class RepositoryManager:
                         self.repo.git.fetch("origin")
 
                 progress.update(task, description="Caching repository...")
-                
+
                 # Cache the repository for future use
                 try:
-                    cache.store_repository(self.repo_url, good_ref, bad_ref, self.clone_dir)
+                    cache.store_repository(
+                        self.repo_url, good_ref, bad_ref, self.clone_dir
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to cache repository: {e}")
 

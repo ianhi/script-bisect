@@ -312,12 +312,14 @@ def _fetch_git_refs(repo_url: str, force_refresh: bool = False) -> list[str]:
         List of available git references (tags, branches)
     """
     cache = get_cache()
-    
+
     # Check cache first (6 hour TTL for refs), unless forcing refresh
-    cached_refs = cache.get_cached_refs(repo_url, ttl_hours=6.0, force_refresh=force_refresh)
+    cached_refs = cache.get_cached_refs(
+        repo_url, ttl_hours=6.0, force_refresh=force_refresh
+    )
     if cached_refs is not None and not force_refresh:
         return cached_refs
-    
+
     refs = []
 
     # Clean up repo URL
@@ -356,11 +358,11 @@ def _fetch_git_refs(repo_url: str, force_refresh: bool = False) -> list[str]:
         pass
 
     refs = sorted(set(refs))  # Remove duplicates and sort
-    
+
     # Store in cache for future use
     if refs:  # Only cache if we got results
         cache.store_refs(repo_url, refs)
-    
+
     return refs
 
 
