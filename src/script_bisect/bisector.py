@@ -64,6 +64,7 @@ class GitBisector:
         keep_clone: bool = False,
         inverse: bool = False,
         skip_verification: bool = False,
+        full_traceback: bool = False,
     ) -> None:
         """Initialize the git bisector.
 
@@ -78,6 +79,7 @@ class GitBisector:
             keep_clone: Whether to keep the cloned repository
             inverse: Whether to find when something was fixed (not broken)
             skip_verification: Skip endpoint verification for faster startup
+            full_traceback: Show complete error tracebacks instead of summaries
         """
         self.script_path = script_path
         self.package = package
@@ -89,6 +91,7 @@ class GitBisector:
         self.keep_clone = keep_clone
         self.inverse = inverse
         self.skip_verification = skip_verification
+        self.full_traceback = full_traceback
 
         # Initialize components
         self.parser = ScriptParser(script_path)
@@ -159,6 +162,7 @@ class GitBisector:
             package=self.package,
             repo_url=self.repo_url,
             test_command=self.test_command,
+            full_traceback=self.full_traceback,
         )
 
     def _get_commit_range(self) -> list[git.Commit]:

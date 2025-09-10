@@ -24,6 +24,7 @@ class TestRunner:
         repo_url: str,
         test_command: str | None = None,
         timeout: int = 120,
+        full_traceback: bool = False,
     ) -> None:
         """Initialize the test runner.
 
@@ -39,6 +40,7 @@ class TestRunner:
         self.repo_url = repo_url
         self.test_command = test_command
         self.timeout = timeout
+        self.full_traceback = full_traceback
 
         self.parser = ScriptParser(script_path)
         self.dependency_fixer = AutoDependencyFixer()
@@ -295,9 +297,13 @@ class TestRunner:
             stderr: Standard error from test execution
 
         Returns:
-            A concise one-line error summary
+            A concise one-line error summary or full traceback if full_traceback is enabled
         """
         error_output = (stdout + "\n" + stderr).strip()
+
+        # If full traceback is requested, return the complete error output
+        if self.full_traceback:
+            return error_output if error_output else "Unknown error"
 
         # Look for common Python error patterns
         lines = error_output.split("\n")

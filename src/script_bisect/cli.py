@@ -124,6 +124,11 @@ def print_summary_table(
     is_flag=True,
     help="Automatically confirm bisection without prompting",
 )
+@click.option(
+    "--full-traceback",
+    is_flag=True,
+    help="Show complete error tracebacks instead of summary messages",
+)
 @click.version_option(version=__version__)
 def main(
     source: str,
@@ -141,6 +146,7 @@ def main(
     keep_script: bool = False,
     verbose: bool = False,
     yes: bool = False,
+    full_traceback: bool = False,
 ) -> None:
     """Bisect package versions in PEP 723 Python scripts.
 
@@ -195,6 +201,7 @@ def main(
                 no_edit,
                 keep_script,
                 yes,
+                full_traceback,
             )
         elif Path(source).exists():
             console.print("[dim]📄 Detected script file, running bisection...[/dim]")
@@ -211,6 +218,7 @@ def main(
                 dry_run,
                 verify_endpoints,
                 yes,
+                full_traceback,
             )
         else:
             console.print(f"[red]❌ Source not found or invalid: {source}[/red]")
@@ -256,6 +264,7 @@ def _handle_github_url(
     no_edit: bool = False,
     keep_script: bool = False,
     yes: bool = False,
+    full_traceback: bool = False,
 ) -> None:
     """Handle GitHub URL workflow."""
     # Initialize components
@@ -334,6 +343,7 @@ def _handle_github_url(
             verify_endpoints,
             github_context=github_url,
             yes=yes,
+            full_traceback=full_traceback,
         )
 
     finally:
@@ -363,6 +373,7 @@ def _handle_script_file(
     dry_run: bool = False,
     verify_endpoints: bool = False,
     yes: bool = False,
+    full_traceback: bool = False,
 ) -> None:
     """Handle local script file workflow."""
     # Parse the script to validate and extract information
@@ -385,6 +396,7 @@ def _handle_script_file(
         verify_endpoints,
         github_context=None,  # No GitHub context for local files
         yes=yes,
+        full_traceback=full_traceback,
     )
 
 
@@ -403,6 +415,7 @@ def _run_bisection(
     verify_endpoints: bool = False,
     github_context: str | None = None,
     yes: bool = False,
+    full_traceback: bool = False,
 ) -> None:
     """Run the common bisection logic."""
     # Interactive package selection if not provided
@@ -487,6 +500,7 @@ def _run_bisection(
         keep_clone=keep_clone,
         inverse=inverse,
         skip_verification=not verify_endpoints,
+        full_traceback=full_traceback,
     )
 
     result = bisector.run()
