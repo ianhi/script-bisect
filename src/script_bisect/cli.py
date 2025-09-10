@@ -130,6 +130,11 @@ def print_summary_table(
     is_flag=True,
     help="Show complete error tracebacks instead of summary messages",
 )
+@click.option(
+    "--refresh-cache",
+    is_flag=True,
+    help="Force refresh of cached data (repos, refs, metadata)",
+)
 @click.version_option(version=__version__)
 def main(
     source: str,
@@ -148,6 +153,7 @@ def main(
     verbose: bool = False,
     yes: bool = False,
     full_traceback: bool = False,
+    refresh_cache: bool = False,
 ) -> None:
     """Bisect package versions in PEP 723 Python scripts.
 
@@ -183,6 +189,13 @@ def main(
 
     try:
         print_banner()
+        
+        # Handle cache refresh if requested
+        if refresh_cache:
+            from .cache_system import clear_global_cache
+            console.print("[yellow]🗂️ Refreshing cached data...[/yellow]")
+            clear_global_cache()
+            console.print("[green]✅ Cache cleared - fresh data will be fetched[/green]")
 
         # Auto-detect source type
         if _is_github_url(source):

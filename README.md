@@ -155,6 +155,10 @@ script-bisect SCRIPT PACKAGE GOOD_REF BAD_REF
 - `--keep-clone`: Keep cloned repository for inspection
 - `--dry-run`: Show what would be done without executing
 - `--verbose`: Enable detailed logging
+- `--yes`: Auto-confirm all prompts for automated usage
+- `--verify-endpoints`: Verify good/bad references before starting
+- `--refresh-cache`: Force refresh of cached repositories and metadata
+- `--full-traceback`: Show full Python tracebacks on errors
 
 ### Examples
 
@@ -193,6 +197,28 @@ script-bisect test.py pandas v2.0.0 main \\
 script-bisect regression_test.py scipy v1.10.0 v1.11.0 --inverse
 ```
 
+#### Automated Usage
+
+```bash
+# Auto-confirm all prompts for CI/automated use
+script-bisect test.py numpy v1.24.0 v1.26.0 --yes --verbose
+
+# Force refresh cached data and verify endpoints
+script-bisect test.py xarray v2024.01.0 main --refresh-cache --verify-endpoints
+```
+
+#### Advanced Examples
+
+```bash
+# Full automation with error details
+script-bisect regression.py pandas v1.5.0 v2.0.0 \\
+    --yes --full-traceback --keep-clone
+
+# Interactive mode with custom test command
+script-bisect integration_test.py requests v2.28.0 v2.31.0 \\
+    --test-command "python -m pytest {script} -v"
+```
+
 ## Requirements
 
 ### System Requirements
@@ -218,16 +244,66 @@ Your Python script must contain PEP 723 inline metadata with dependencies:
 
 The tool will automatically convert PyPI package specs to git dependencies during bisection.
 
+## Interactive Features
+
+### Parameter Editing
+
+Before starting bisection, you can interactively modify parameters:
+
+```
+🔄 Bisection Summary
+[s] 📄 Script     test_script.py
+[p] 📦 Package    xarray
+[r] 🔗 Repository https://github.com/pydata/xarray.git
+[g] ✅ Good ref   v2024.01.0
+[b] ❌ Bad ref    v2024.03.0
+[t] 🧪 Test command uv run test_script.py
+[i] 🔄 Mode       Normal (find when broken)
+
+Press the highlighted key to edit that parameter, or:
+  Enter/y - Start bisection
+  n/q - Cancel
+```
+
+- Press any highlighted key (s, p, r, g, b, t, i) to edit that parameter
+- Edit scripts directly in your configured editor (respects `git config core.editor`)
+- Toggle between normal and inverse bisection modes
+- Modify test commands and repository URLs on the fly
+
+### End State Options
+
+After bisection completes, choose what to do next:
+
+1. **Exit** - Complete the bisection
+2. **Re-run with different refs** - Try different good/bad references
+3. **Re-run with different script** - Edit or change the test script
+4. **Re-run with modified parameters** - Change package, repo URL, or test command
+
+### Intelligent Caching
+
+script-bisect includes a smart caching system for better performance:
+
+- **Repository Caching**: Cloned repositories are cached in `~/.cache/script-bisect/repos/`
+- **Metadata Caching**: Package metadata is cached to avoid repeated PyPI lookups
+- **Automatic Updates**: Cached repos are updated with `git fetch` for new commits
+- **Auto-cleanup**: Expired cache entries are cleaned up automatically
+- **Force Refresh**: Use `--refresh-cache` to bypass cache and fetch fresh data
+
+Cache locations follow XDG Base Directory standards:
+- Linux/macOS: `~/.cache/script-bisect/`
+- Windows: `%LOCALAPPDATA%\script-bisect\cache\`
+
 ## How It Works
 
 ### 1. Script Analysis
 - Parses PEP 723 metadata from your script
 - Validates package dependencies and requirements
-- Auto-detects repository URLs for PyPI packages
+- Auto-detects repository URLs for PyPI packages using multiple sources
 
 ### 2. Repository Management
-- Clones the package repository to a temporary directory
+- Clones the package repository (with intelligent caching)
 - Validates that good/bad references exist
+- Updates cached repositories with latest commits
 - Manages cleanup automatically (unless `--keep-clone` is used)
 
 ### 3. Bisection Process
@@ -240,6 +316,7 @@ The tool will automatically convert PyPI package specs to git dependencies durin
 - Identifies the exact problematic commit
 - Shows commit details (author, date, message)
 - Provides GitHub/GitLab links when possible
+- Offers interactive options for follow-up actions
 
 ## Troubleshooting
 

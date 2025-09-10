@@ -198,8 +198,14 @@ def _rerun_with_different_script(
                     "[yellow]Please edit the script and save it, then press Enter to continue.[/yellow]"
                 )
 
-                # Try to open with preferred editor
-                opened = _open_editor_safely(script_path)
+                # Use the consolidated editor integration
+                from .editor_integration import EditorIntegration
+                editor = EditorIntegration()
+                
+                try:
+                    opened = editor.launch_editor(script_path)
+                except Exception:
+                    opened = False
 
                 if not opened:
                     console.print(
@@ -370,69 +376,4 @@ def _rerun_with_modified_parameters(
     )
 
 
-def _open_editor_safely(script_path: Path) -> bool:
-    """Safely open an editor without causing multiple editor issues."""
-    # Try to detect the user's preferred editor from environment
-    preferred_editor = os.environ.get("EDITOR")
-    if preferred_editor:
-        try:
-            console.print(
-                f"[dim]Opening with {preferred_editor} (from $EDITOR)...[/dim]"
-            )
-            result = subprocess.run([preferred_editor, str(script_path)])
-            return result.returncode == 0
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            console.print(f"[dim]Failed to open with {preferred_editor}[/dim]")
-
-    # Check for preferred editors in order of preference
-    editors_to_try = []
-
-    # Check for VS Code first (most user-friendly, non-blocking)
-    if subprocess.run(["which", "code"], capture_output=True).returncode == 0:
-        editors_to_try.append(("code", True))  # True = non-blocking
-
-    # Check for Sublime Text
-    if subprocess.run(["which", "subl"], capture_output=True).returncode == 0:
-        editors_to_try.append(("subl", True))
-
-    # macOS open command (opens with default app)
-    if (
-        os.name == "posix"
-        and subprocess.run(["which", "open"], capture_output=True).returncode == 0
-    ):
-        editors_to_try.append(("open", True))
-
-    # Check for vim (blocking, terminal-based)
-    if subprocess.run(["which", "vim"], capture_output=True).returncode == 0:
-        editors_to_try.append(("vim", False))  # False = blocking
-
-    # Check for nano as last resort (blocking, terminal-based)
-    if subprocess.run(["which", "nano"], capture_output=True).returncode == 0:
-        editors_to_try.append(("nano", False))
-
-    # Try each available editor, but stop after the first one that launches successfully
-    for editor, is_non_blocking in editors_to_try:
-        try:
-            console.print(f"[dim]Opening with {editor}...[/dim]")
-
-            if is_non_blocking:
-                # These editors can run in the background
-                result = subprocess.run([editor, str(script_path)], timeout=10)
-                if result.returncode == 0:
-                    return True
-            else:
-                # Terminal editors like vim, nano - run synchronously
-                result = subprocess.run([editor, str(script_path)])
-                # For terminal editors, any exit is considered success
-                # (user may exit without saving, that's their choice)
-                return True
-
-        except (
-            subprocess.CalledProcessError,
-            subprocess.TimeoutExpired,
-            FileNotFoundError,
-        ):
-            console.print(f"[dim]Failed to open with {editor}[/dim]")
-            continue
-
-    return False
+# Removed _open_editor_safely function - now using consolidated EditorIntegration

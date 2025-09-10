@@ -10,6 +10,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 
+from .cache_system import get_cache
+
 if TYPE_CHECKING:
     from prompt_toolkit.document import Document
 
@@ -299,15 +301,23 @@ def _is_valid_repo_url(url: str) -> bool:
     return any(re.match(pattern, url) for pattern in patterns)
 
 
-def _fetch_git_refs(repo_url: str) -> list[str]:
+def _fetch_git_refs(repo_url: str, force_refresh: bool = False) -> list[str]:
     """Fetch available git references from a repository.
 
     Args:
         repo_url: Repository URL to fetch refs from
+        force_refresh: If True, bypass cache and fetch fresh data
 
     Returns:
         List of available git references (tags, branches)
     """
+    cache = get_cache()
+    
+    # Check cache first (6 hour TTL for refs), unless forcing refresh
+    cached_refs = cache.get_cached_refs(repo_url, ttl_hours=6.0, force_refresh=force_refresh)
+    if cached_refs is not None and not force_refresh:
+        return cached_refs
+    
     refs = []
 
     # Clean up repo URL
@@ -345,7 +355,13 @@ def _fetch_git_refs(repo_url: str) -> list[str]:
         # git command failed or not available
         pass
 
-    return sorted(set(refs))  # Remove duplicates and sort
+    refs = sorted(set(refs))  # Remove duplicates and sort
+    
+    # Store in cache for future use
+    if refs:  # Only cache if we got results
+        cache.store_refs(repo_url, refs)
+    
+    return refs
 
 
 def _get_recent_refs(refs: list[str]) -> list[str]:

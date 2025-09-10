@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 import tomli_w
 
+from .cache_system import get_cache
 from .exceptions import ParseError
 from .utils import extract_package_name
 
@@ -303,15 +304,25 @@ class ScriptParser:
 
         return warnings
 
-    def _get_repo_from_metadata(self, package_name: str) -> str | None:
+    def _get_repo_from_metadata(self, package_name: str, force_refresh: bool = False) -> str | None:
         """Try to extract repository URL from package metadata using importlib.
 
         Args:
             package_name: Name of the package to look up
+            force_refresh: If True, bypass cache and fetch fresh data
 
         Returns:
             Repository URL if found, None otherwise
         """
+        cache = get_cache()
+        
+        # Check cache first (24 hour TTL for package metadata), unless forcing refresh
+        cached_metadata = cache.get_cached_metadata(package_name, ttl_hours=24.0)
+        if cached_metadata is not None and not force_refresh:
+            return cached_metadata.get("repository_url")
+        
+        result_metadata = {"repository_url": None}
+        
         try:
             import importlib.metadata as metadata
 
@@ -321,6 +332,15 @@ class ScriptParser:
             # Check common URL fields that might contain the repository
             project_urls = dist.metadata.get_all("Project-URL") or []
             home_page = dist.metadata.get("Home-page")
+            
+            # Store complete metadata for caching
+            result_metadata.update({
+                "repository_url": None,
+                "home_page": home_page,
+                "project_urls": project_urls,
+                "version": dist.version,
+                "summary": dist.metadata.get("Summary"),
+            })
 
             # Look for repository URLs in project URLs
             for url_entry in project_urls:
@@ -337,16 +357,22 @@ class ScriptParser:
                             "github",
                         ]
                     ) and self._is_valid_git_repo_url(url):
+                        result_metadata["repository_url"] = url
+                        cache.store_metadata(package_name, result_metadata)
                         return url
 
             # Check home page as fallback
             if home_page and self._is_valid_git_repo_url(home_page):
+                result_metadata["repository_url"] = home_page
+                cache.store_metadata(package_name, result_metadata)
                 return home_page
 
         except (metadata.PackageNotFoundError, ImportError, ValueError):
             # Package not installed or importlib.metadata not available
             pass
 
+        # Cache the result even if None (to avoid repeated lookups)
+        cache.store_metadata(package_name, result_metadata)
         return None
 
     def _is_valid_git_repo_url(self, url: str) -> bool:

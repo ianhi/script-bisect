@@ -8,12 +8,15 @@ Git operations.
 from __future__ import annotations
 
 import logging
+import shutil
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import git
 from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from .cache_system import get_cache
 
 if TYPE_CHECKING:
     from git import Repo
@@ -48,10 +51,12 @@ class RepositoryManager:
         """Set up a local repository optimized for bisection.
 
         This method performs all necessary Git operations in the most efficient way:
-        1. Creates a bare clone (no working directory initially)
-        2. Fetches only the required refs with blob filtering
-        3. Sets up sparse checkout to minimize disk usage
-        4. Returns the repository path for bisection operations
+        1. Checks cache for existing repository
+        2. Creates a bare clone (no working directory initially) if not cached
+        3. Fetches only the required refs with blob filtering
+        4. Sets up sparse checkout to minimize disk usage
+        5. Stores in cache for future use
+        6. Returns the repository path for bisection operations
 
         Args:
             good_ref: The known good reference (commit, tag, or branch)
@@ -63,6 +68,33 @@ class RepositoryManager:
         Raises:
             git.GitCommandError: If any Git operation fails
         """
+        cache = get_cache()
+        
+        # Check if we have a cached repository
+        cached_repo = cache.cache_repository(self.repo_url, good_ref, bad_ref)
+        if cached_repo:
+            logger.info("Using cached repository, updating with latest refs...")
+            # Copy cached repository to a temporary location for use
+            self.clone_dir = Path(tempfile.mkdtemp(prefix="script_bisect_repo_"))
+            shutil.copytree(cached_repo, self.clone_dir)
+            self.repo = git.Repo(self.clone_dir)
+            
+            # Update the cached repo with latest refs to catch new commits
+            try:
+                logger.debug("Fetching latest refs to update cache...")
+                # Fetch specific refs and any new commits between them
+                self.repo.git.fetch("origin", good_ref, bad_ref, "--filter=blob:none")
+                try:
+                    # Also try to fetch the range to get any new commits
+                    self.repo.git.fetch("origin", f"{good_ref}..{bad_ref}", "--filter=blob:none")
+                except git.GitCommandError:
+                    logger.debug("Range fetch failed, using individual refs")
+            except git.GitCommandError as e:
+                logger.warning(f"Failed to update cached repository: {e}")
+                # Continue with cached version if update fails
+            
+            return self.clone_dir
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -132,13 +164,19 @@ class RepositoryManager:
                         logger.debug("Blob filter not supported, fetching normally")
                         self.repo.git.fetch("origin")
 
+                progress.update(task, description="Caching repository...")
+                
+                # Cache the repository for future use
+                try:
+                    cache.store_repository(self.repo_url, good_ref, bad_ref, self.clone_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to cache repository: {e}")
+
                 progress.update(task, description="✅ Repository ready for bisection")
 
             except Exception as e:
                 # Clean up on failure
                 if self.clone_dir and self.clone_dir.exists():
-                    import shutil
-
                     shutil.rmtree(self.clone_dir, ignore_errors=True)
                 raise git.GitCommandError(
                     f"Failed to set up repository: {e}", status=1

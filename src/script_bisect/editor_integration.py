@@ -21,120 +21,51 @@ class EditorIntegration:
 
     def __init__(self) -> None:
         """Initialize the editor integration."""
-        self.preferred_editors = [
-            "vim",
-            "nvim",
-            "nano",
-            "emacs",
-            "code",  # VS Code
-            "subl",  # Sublime Text
-            "atom",
-        ]
+        pass  # No longer need preferred editors list
 
-    def find_available_editors(self) -> list[tuple[str, str]]:
-        """Find all available editors on the system.
-
-        Returns:
-            List of tuples (name, path) for available editors
-        """
-        available = []
-
-        # Check EDITOR environment variable first
-        env_editor = os.environ.get("EDITOR")
-        if env_editor and shutil.which(env_editor):
-            available.append(("$EDITOR", env_editor))
-
-        # Check VISUAL environment variable
-        visual_editor = os.environ.get("VISUAL")
-        if (
-            visual_editor
-            and shutil.which(visual_editor)
-            and visual_editor != env_editor
-        ):
-            available.append(("$VISUAL", visual_editor))
-
-        # Check preferred editors
-        for editor in self.preferred_editors:
-            editor_path = shutil.which(editor)
-            if editor_path and editor_path not in [e[1] for e in available]:
-                available.append((editor, editor_path))
-
-        return available
-
-    def find_available_editor(self) -> str | None:
-        """Find an available editor on the system (legacy method).
-
-        Returns:
-            Path to an available editor, or None if none found
-        """
-        editors = self.find_available_editors()
-        return editors[0][1] if editors else None
-
-    def prompt_for_editor(self) -> str | None:
-        """Prompt user to select an editor from available options.
-
-        Returns:
-            Path to selected editor, or None if cancelled
-        """
-        available_editors = self.find_available_editors()
-
-        if not available_editors:
-            console.print("[red]❌ No editors found on system[/red]")
-            console.print(
-                "[yellow]💡 Please install one of:[/yellow] "
-                + ", ".join(self.preferred_editors)
+    def _get_git_editor(self) -> str | None:
+        """Get git's configured editor."""
+        try:
+            result = subprocess.run(
+                ["git", "config", "--global", "core.editor"],
+                capture_output=True,
+                text=True
             )
-            return None
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        return None
 
-        if len(available_editors) == 1:
-            name, path = available_editors[0]
-            console.print(f"[green]📝 Using {name}: {Path(path).name}[/green]")
-            return path
+    def _find_terminal_editor(self) -> str | None:
+        """Find a suitable terminal editor using git's approach."""
+        # Try git's configured editor first
+        git_editor = self._get_git_editor()
+        if git_editor:
+            return git_editor
 
-        # Show editor selection table
-        from rich.prompt import Prompt
-        from rich.table import Table
+        # Try environment variables
+        for env_var in ["EDITOR", "VISUAL"]:
+            editor = os.environ.get(env_var)
+            if editor:
+                return editor
 
-        console.print("\n[bold blue]📝 Available Editors[/bold blue]")
-        table = Table(show_header=True)
-        table.add_column("Index", style="cyan", width=6)
-        table.add_column("Name", style="yellow", width=15)
-        table.add_column("Command", style="white", width=30)
-        table.add_column("Path", style="dim", width=50)
+        # Fallback to common terminal editors
+        terminal_editors = ["vim", "vi", "nano", "emacs"]
+        for editor in terminal_editors:
+            if shutil.which(editor):
+                return editor
 
-        for i, (name, path) in enumerate(available_editors, 1):
-            command = Path(path).name
-            table.add_row(str(i), name, command, str(path))
+        return None
 
-        console.print(table)
-        console.print()
-
-        while True:
-            try:
-                choice = Prompt.ask(
-                    "[bold cyan]Select editor[/bold cyan]",
-                    choices=[str(i) for i in range(1, len(available_editors) + 1)],
-                    default="1",
-                )
-
-                index = int(choice) - 1
-                if 0 <= index < len(available_editors):
-                    name, path = available_editors[index]
-                    console.print(
-                        f"[green]✅ Selected {name}: {Path(path).name}[/green]"
-                    )
-                    return path
-
-            except (ValueError, KeyboardInterrupt):
-                console.print("\n[yellow]⚠️ Editor selection cancelled[/yellow]")
-                return None
+    # Removed complex editor selection methods - now using git-based approach
 
     def launch_editor(self, file_path: Path, read_only: bool = False) -> bool:
-        """Launch an external editor to edit a file.
+        """Launch an external editor to edit a file using git's configured editor.
 
         Args:
             file_path: Path to the file to edit
-            read_only: Whether to open in read-only mode (if supported)
+            read_only: Whether to open in read-only mode (ignored for simplicity)
 
         Returns:
             True if editing completed successfully, False otherwise
@@ -142,50 +73,24 @@ class EditorIntegration:
         Raises:
             ScriptBisectError: If no suitable editor is found
         """
-        editor = self.prompt_for_editor()
+        editor = self._find_terminal_editor()
         if not editor:
             raise ScriptBisectError(
-                "No editor selected or available. Please install one of: "
-                + ", ".join(self.preferred_editors)
+                "No terminal editor found. Please set git config core.editor, "
+                "$EDITOR/$VISUAL environment variable, or install vim/nano."
             )
 
-        console.print(
-            f"[dim]🖊️ Opening {file_path.name} in {Path(editor).name}...[/dim]"
-        )
-
-        # Build editor command
-        cmd = [editor]
-
-        # Add read-only flags for supported editors
-        if read_only:
-            editor_name = Path(editor).name.lower()
-            if editor_name in ("vim", "nvim"):
-                cmd.extend(["-R"])  # Read-only mode
-            elif editor_name == "nano":
-                cmd.extend(["-v"])  # View mode
-            elif editor_name == "emacs":
-                cmd.extend(["--eval", "(setq buffer-read-only t)"])
-
-        cmd.append(str(file_path))
+        console.print(f"[dim]🖊️ Opening {file_path.name} with {editor}...[/dim]")
 
         try:
-            # Launch editor and wait for completion
-            result = subprocess.run(
-                cmd,
-                check=False,  # Don't raise on non-zero exit codes
-                env=dict(os.environ, TERM=os.environ.get("TERM", "xterm-256color")),
-            )
-
-            if result.returncode != 0:
-                console.print(
-                    f"[yellow]⚠️ Editor exited with code {result.returncode}[/yellow]"
-                )
-                return False
-
+            # Launch editor and wait for completion (all terminal editors are blocking)
+            result = subprocess.run([editor, str(file_path)])
+            # For terminal editors, any exit is considered success
+            # (user may exit without saving, that's their choice)
             console.print("[green]✅ Editor session completed[/green]")
             return True
 
-        except (subprocess.SubprocessError, FileNotFoundError) as e:
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
             console.print(f"[red]❌ Failed to launch editor: {e}[/red]")
             return False
 
@@ -251,7 +156,7 @@ class EditorIntegration:
                     console.print(f"[red]Failed to restore backup: {e}[/red]")
             return False
 
-        # Check if file was modified
+        # Check if file was modified and clean up backup
         try:
             new_content = script_path.read_text(encoding="utf-8")
             new_line_count = len(new_content.splitlines())
@@ -271,11 +176,8 @@ class EditorIntegration:
         except (OSError, UnicodeDecodeError):
             console.print("[yellow]⚠️ Could not verify script changes[/yellow]")
 
-        # Confirm continuation
-        return Confirm.ask(
-            "[bold cyan]Continue with bisection using the edited script?[/bold cyan]",
-            default=True,
-        )
+        # User already confirmed by completing editor session - no need for additional confirmation
+        return True
 
     def show_script_preview(self, script_path: Path, max_lines: int = 20) -> None:
         """Show a preview of the script content.

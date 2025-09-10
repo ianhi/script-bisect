@@ -76,42 +76,35 @@ def confirm_bisection_params(
     while True:
         console.print("\n🔄 [bold]Bisection Summary[/bold]")
 
-        table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_column("Key", style="cyan", width=8)
-        table.add_column("Parameter", style="dim", width=16)
-        table.add_column("Value", width=35)
-
-        table.add_row("", "📄 Script", str(script_path))
-        table.add_row("[p]", "📦 Package", str(current_params["package"]))
-        table.add_row("[r]", "🔗 Repository", str(current_params["repo_url"]))
-        table.add_row("[g]", "✅ Good ref", str(current_params["good_ref"]))
-        table.add_row("[b]", "❌ Bad ref", str(current_params["bad_ref"]))
-        table.add_row(
-            "[t]",
-            "🧪 Test command",
-            str(current_params["test_command"] or f"uv run {script_path.name}"),
+        # Manual formatting for complete control over spacing
+        # Escape square brackets to prevent Rich markup conflicts
+        console.print(f"[cyan]\\[s][/cyan] [dim]📄 Script[/dim]     {script_path}")
+        console.print(
+            f"[cyan]\\[p][/cyan] [dim]📦 Package[/dim]    {current_params['package']}"
         )
-        table.add_row(
-            "[i]",
-            "🔄 Mode",
+        console.print(
+            f"[cyan]\\[r][/cyan] [dim]🔗 Repository[/dim] {current_params['repo_url']}"
+        )
+        console.print(
+            f"[cyan]\\[g][/cyan] [dim]✅ Good ref[/dim]   {current_params['good_ref']}"
+        )
+        console.print(
+            f"[cyan]\\[b][/cyan] [dim]❌ Bad ref[/dim]    {current_params['bad_ref']}"
+        )
+        test_cmd = current_params["test_command"] or f"uv run {script_path.name}"
+        console.print(f"[cyan]\\[t][/cyan] [dim]🧪 Test command[/dim] {test_cmd}")
+        mode_text = (
             "Inverse (find when fixed)"
             if current_params["inverse"]
-            else "Normal (find when broken)",
+            else "Normal (find when broken)"
         )
-
-        console.print(table)
+        console.print(f"[cyan]\\[i][/cyan] [dim]🔄 Mode[/dim]       {mode_text}")
 
         if auto_confirm:
             console.print("\nStart bisection? yes (auto-confirmed)")
             return True, current_params
 
-        console.print("\n[dim]Edit parameters by pressing their key, or:[/dim]")
-        console.print("  [cyan]p[/cyan] - Edit package name")
-        console.print("  [cyan]r[/cyan] - Edit repository URL")
-        console.print("  [cyan]g[/cyan] - Edit good reference")
-        console.print("  [cyan]b[/cyan] - Edit bad reference")
-        console.print("  [cyan]t[/cyan] - Edit test command")
-        console.print("  [cyan]i[/cyan] - Toggle inverse mode")
+        console.print("\n[dim]Press the highlighted key to edit that parameter, or:[/dim]")
         console.print("  [green]Enter/y[/green] - Start bisection")
         console.print("  [red]n/q[/red] - Cancel")
 
@@ -122,6 +115,26 @@ def confirm_bisection_params(
                 return True, current_params
             elif choice in ("n", "no", "q", "quit"):
                 return False, current_params
+            elif choice == "s":
+                console.print(
+                    "[yellow]Script editing opens the file in your default editor[/yellow]"
+                )
+                console.print(f"[dim]Script path: {script_path}[/dim]")
+
+                # Use the consolidated editor integration
+                from .editor_integration import EditorIntegration
+                editor = EditorIntegration()
+                
+                try:
+                    if editor.launch_editor(script_path):
+                        console.print("[green]✓[/green] Script editor opened")
+                    else:
+                        console.print("[yellow]Could not open editor automatically[/yellow]")
+                        console.print(f"[dim]Please manually edit: {script_path}[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]Could not open editor: {e}[/yellow]")
+                    console.print(f"[dim]Please manually edit: {script_path}[/dim]")
+
             elif choice == "p":
                 new_package = Prompt.ask(
                     "Package name", default=current_params["package"]

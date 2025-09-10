@@ -30,11 +30,15 @@ src/script_bisect/
 ├── parser.py                   # PEP 723 script metadata parsing
 ├── bisector.py                 # Core git bisection logic
 ├── runner.py                   # Test execution and process management
-├── repository_manager.py       # Git repository operations with optimizations (NEW)
-├── end_state_menu.py           # Post-bisection options and re-runs (NEW)
-├── bisection_orchestrator.py   # High-level bisection coordination (NEW)
-├── validation.py               # Reference validation and fixing (NEW)
-├── cli_display.py              # Display utilities and formatting (NEW)
+├── repository_manager.py       # Git repository operations with optimizations
+├── end_state_menu.py           # Post-bisection options and re-runs
+├── bisection_orchestrator.py   # High-level bisection coordination
+├── validation.py               # Reference validation and fixing
+├── cli_display.py              # Display utilities and formatting
+├── editor_integration.py       # External editor integration (NEW)
+├── cache_system.py             # Intelligent caching system
+├── cache_cli.py                # Cache management CLI
+├── repository_mappings.py      # Curated package repository mappings (NEW)
 ├── utils.py                    # Shared utilities and helpers
 └── exceptions.py               # Custom exception definitions
 
@@ -116,6 +120,30 @@ examples/                       # Example PEP 723 scripts for testing
 - **Confirmation Dialogs**: Standardized user confirmation patterns
 - **Reusable Components**: Shared display utilities across modules
 
+### 11. Intelligent Cache System (cache_system.py)
+- **Multi-layer Caching**: Repository clones, git references, PyPI metadata, script info
+- **Performance Optimization**: Dramatic speedup for repeated operations
+- **Smart TTL Management**: Different cache lifetimes for different data types
+- **XDG Standards**: Follows XDG cache directory standards (~/.cache/script-bisect)
+- **Cache Management**: CLI tools for stats, cleanup, and cache clearing
+- **Auto-cleanup**: Automatic removal of expired cache entries on startup
+- **Force Refresh**: `--refresh-cache` flag to bypass cache and fetch fresh data
+
+### 12. Editor Integration (editor_integration.py) - NEW FEATURE
+- **Git-based Selection**: Respects `git config core.editor` for editor choice
+- **Terminal Editors**: Smart fallback to $EDITOR, $VISUAL, vim, nano, emacs
+- **Interactive Editing**: Direct script editing from confirmation dialogs
+- **Backup Management**: Automatic backup creation and restoration on failure
+- **Syntax Validation**: Python syntax checking before proceeding
+- **Cross-platform**: Works across different operating systems and editors
+
+### 13. Repository Mappings (repository_mappings.py) - NEW FEATURE
+- **Curated Database**: Hand-maintained list of popular package repository URLs
+- **PyPI Integration**: Automatic fallback to PyPI metadata for repository discovery
+- **Smart Matching**: Intelligent package name to repository URL matching
+- **Performance Cache**: Cached repository lookups for faster repeated access
+- **Community Extensible**: Easy to add new package mappings
+
 ## Key Features
 
 ### Current Functionality
@@ -125,12 +153,22 @@ examples/                       # Example PEP 723 scripts for testing
 4. **Repository Auto-detection**: Automatic discovery of package git repositories
 5. **Reference Validation**: Smart detection and fixing of swapped good/bad refs with suggestions
 6. **Fuzzy Completion**: Advanced autocompletion for git references
-7. **End State Options**: Post-bisection menu for re-running with different parameters (NEW)
-8. **Optimized Performance**: Efficient repository operations with blob filtering (NEW)
-9. **Error Intelligence**: Smart error summarization and full traceback options (NEW)
-10. **Modular Architecture**: Clean separation of concerns for maintainability (NEW)
-11. **CI/CD Integration**: GitHub Actions workflow for testing
-12. **Cross-platform**: Works on macOS, Linux, and Windows
+7. **End State Options**: Post-bisection menu for re-running with different parameters
+8. **Optimized Performance**: Efficient repository operations with blob filtering
+9. **Error Intelligence**: Smart error summarization and full traceback options
+10. **Modular Architecture**: Clean separation of concerns for maintainability
+11. **Intelligent Caching**: Multi-layer caching system for dramatic performance improvements
+12. **Cache Management**: CLI tools for cache statistics, cleanup, and management
+13. **Interactive Parameter Editing**: In-line keybinding system for editing bisection parameters
+14. **Git Editor Integration**: Respects user's git editor configuration for script editing
+15. **Automated Mode**: `--yes` flag for CI/automation usage with no prompts
+16. **Force Refresh**: `--refresh-cache` to bypass cache and fetch fresh repository data
+17. **Endpoint Verification**: `--verify-endpoints` to validate git references before starting
+18. **Enhanced Error Display**: `--full-traceback` for detailed Python error information
+19. **Smart UI Design**: Clean, intuitive interface with Rich markup and keybinding shortcuts
+20. **Repository Mapping**: Curated database of popular Python package repositories
+21. **CI/CD Integration**: GitHub Actions workflow for testing
+22. **Cross-platform**: Works on macOS, Linux, and Windows
 
 ### Usage Patterns
 ```bash
@@ -146,8 +184,19 @@ script-bisect script.py pandas v1.0.0
 # Full specification (no prompts)
 script-bisect script.py pandas v1.0.0 v2.0.0
 
-# Advanced options
-script-bisect script.py pandas v1.0.0 main --inverse --verbose
+# Advanced options with new flags
+script-bisect script.py pandas v1.0.0 main --inverse --verbose --yes
+
+# Automation and CI usage
+script-bisect script.py numpy v1.24.0 v1.26.0 --yes --verify-endpoints --full-traceback
+
+# Cache management and refresh
+script-bisect script.py xarray v2024.01.0 main --refresh-cache --keep-clone
+
+# Cache CLI management
+python -m script_bisect.cache_cli stats       # Show cache statistics
+python -m script_bisect.cache_cli clear       # Clear all caches
+python -m script_bisect.cache_cli cleanup     # Clean up old entries
 ```
 
 ## Testing Strategy
@@ -176,8 +225,43 @@ script-bisect script.py pandas v1.0.0 main --inverse --verbose
 ### Phase 1: Interactive UI System (Previously Implemented)
 The first major update added a complete interactive UI system that transforms the user experience:
 
-### Phase 2: End State Options & Modular Refactoring (NEWLY IMPLEMENTED)
-The latest major enhancement adds comprehensive post-bisection workflow options with significant architectural improvements:
+### Phase 2: End State Options & Modular Refactoring (PREVIOUSLY IMPLEMENTED)
+Major enhancement that added comprehensive post-bisection workflow options with significant architectural improvements.
+
+### Phase 3: Interactive Parameter Editing & UX Improvements (NEWLY IMPLEMENTED)
+The latest major update focuses on user experience improvements and interactive features:
+
+#### Major UX Enhancements
+1. **Interactive Parameter Editing**: Before starting bisection, users can now edit any parameter using intuitive keybindings:
+   ```
+   🔄 Bisection Summary
+   [s] 📄 Script     test_script.py
+   [p] 📦 Package    xarray  
+   [g] ✅ Good ref   v2024.01.0
+   [b] ❌ Bad ref    v2024.03.0
+   [t] 🧪 Test command uv run test_script.py
+   [i] 🔄 Mode       Normal (find when broken)
+   
+   Press the highlighted key to edit that parameter, or:
+     Enter/y - Start bisection
+     n/q - Cancel
+   ```
+
+2. **Git Editor Integration**: Unified editor system that respects user's git configuration
+   - Uses `git config core.editor` as primary choice
+   - Falls back to `$EDITOR`, `$VISUAL`, then common editors (vim, nano, emacs)
+   - Consolidated duplicate editor code paths throughout the codebase
+
+3. **Intelligent Caching Improvements**:
+   - Auto-cleanup of expired cache entries on startup
+   - `--refresh-cache` flag for forcing fresh data
+   - Repository updates with `git fetch` for new commits
+   - Comprehensive cache management CLI
+
+4. **UI Polish**:
+   - Fixed Rich markup conflicts (keybinding indicators properly escaped)
+   - Simplified confirmation dialogs by removing redundant prompts
+   - Clean, professional interface with inline keybinding hints
 
 #### Before (Rigid CLI)
 ```bash
