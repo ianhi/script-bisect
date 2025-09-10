@@ -80,12 +80,12 @@ class TestRunner:
             # This preserves any dependency fixes that have been applied
             current_content = self.managed_script_path.read_text(encoding="utf-8")
             temp_parser = ScriptParser.from_content(current_content)
-            
+
             # Update the git reference using the current state
             updated_content = temp_parser.update_git_reference(
                 self.package, self.repo_url, commit_hash
             )
-            
+
             # Write the updated content back to the managed script
             self.managed_script_path.write_text(updated_content, encoding="utf-8")
 

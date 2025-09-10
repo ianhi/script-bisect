@@ -40,21 +40,21 @@ class ScriptParser:
         self._metadata = self._parse_metadata()
 
     @classmethod
-    def from_content(cls, content: str) -> "ScriptParser":
+    def from_content(cls, content: str) -> ScriptParser:
         """Create a ScriptParser from script content rather than a file.
-        
+
         Args:
             content: The script content with PEP 723 metadata
-            
+
         Returns:
             ScriptParser instance
-            
+
         Raises:
             ParseError: If the content contains invalid metadata
         """
         # Create a temporary instance
         instance = cls.__new__(cls)
-        instance.script_path = None  # No file path for content-based parser
+        instance.script_path = None  # type: ignore  # No file path for content-based parser
         instance._content = content
         instance._metadata = instance._parse_metadata()
         return instance

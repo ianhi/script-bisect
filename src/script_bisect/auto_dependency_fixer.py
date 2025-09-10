@@ -8,9 +8,11 @@ script's PEP 723 metadata, then re-runs the test.
 from __future__ import annotations
 
 import re
-import tempfile
-from pathlib import Path
-from typing import NamedTuple
+import subprocess
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from rich.console import Console
 
@@ -28,72 +30,56 @@ class DependencyFix(NamedTuple):
 class AutoDependencyFixer:
     """Automatically detects and fixes missing dependencies during bisection."""
 
-    # Common dependency fixes based on error patterns
-    DEPENDENCY_FIXES = [
+    # General patterns for detecting missing dependencies
+    GENERAL_PATTERNS = [
+        # Standard import errors - captures package name from error
+        (r"No module named ['\"]([^'\"]+)['\"]", "Import error"),
+        (r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]", "Module not found"),
+        (r"ImportError: No module named ['\"]([^'\"]+)['\"]", "Import failure"),
+        # Engine/backend not available patterns
+        (r"unrecognized engine ['\"]([^'\"]+)['\"]", "Engine not available"),
+        (r"engine ['\"]([^'\"]+)['\"] is not available", "Engine not available"),
+        # Chunk manager patterns
+        (r"chunk manager ['\"]([^'\"]+)['\"] is not available", "Chunk manager missing"),
+        # General "X is not installed" patterns
+        (r"['\"]([^'\"]+)['\"] is not installed", "Package not installed"),
+        (r"Please install ['\"]([^'\"]+)['\"]", "Installation required"),
+    ]
+
+    # Special cases where the detected name needs to be mapped to a different package
+    PACKAGE_MAPPING = {
+        # Common mismatches between import names and package names
+        "netCDF4": "netcdf4",
+        "cv2": "opencv-python",
+        "PIL": "pillow",
+        "sklearn": "scikit-learn",
+        "yaml": "pyyaml",
+        "dask": "dask[array]",  # Use array extras for xarray compatibility
+    }
+
+    # Domain-specific error interpreters - these translate application errors into missing dependencies
+    DOMAIN_INTERPRETERS = [
+        # xarray/backend engine errors -> missing backend packages
+        (r"unrecognized engine ['\"]([^'\"]+)['\"]", r"\1", "Backend engine not available"),
+        (r"engine ['\"]([^'\"]+)['\"] is not available", r"\1", "Backend engine missing"),
+        # chunk manager errors -> dask variants
+        (r"chunk manager ['\"]dask['\"] is not available", "dask[array]", "Dask array support needed"),
+        # matplotlib backend errors
+        (r"backend ['\"]([^'\"]+)['\"] is not available", r"\1", "Backend not available"),
+    ]
+
+    # Special error messages that need custom handling (not covered by general patterns)
+    SPECIAL_CASES = [
         DependencyFix(
             package_name="cftime",
             reason="Required for non-standard calendar decoding in xarray/netCDF",
             error_pattern=r"The cftime package is required for working with non-standard calendars",
         ),
-        DependencyFix(
-            package_name="dask[array]",
-            reason="Required for chunked array operations",
-            error_pattern=r"chunk manager 'dask' is not available",
-        ),
-        DependencyFix(
-            package_name="dask[array]",
-            reason="Required for chunked array operations",
-            error_pattern=r"make sure 'dask' is installed",
-        ),
-        DependencyFix(
-            package_name="netcdf4",
-            reason="Required for NetCDF4 backend",
-            error_pattern=r"No module named 'netCDF4'",
-        ),
-        DependencyFix(
-            package_name="scipy",
-            reason="Required for scipy backend in xarray",
-            error_pattern=r"No module named 'scipy'",
-        ),
-        DependencyFix(
-            package_name="matplotlib",
-            reason="Required for plotting functionality",
-            error_pattern=r"No module named 'matplotlib'",
-        ),
-        DependencyFix(
-            package_name="seaborn",
-            reason="Required for statistical plotting",
-            error_pattern=r"No module named 'seaborn'",
-        ),
-        DependencyFix(
-            package_name="zarr",
-            reason="Required for Zarr array storage",
-            error_pattern=r"No module named 'zarr'",
-        ),
-        DependencyFix(
-            package_name="fsspec",
-            reason="Required for file system operations",
-            error_pattern=r"No module named 'fsspec'",
-        ),
-        DependencyFix(
-            package_name="h5py",
-            reason="Required for HDF5 operations",
-            error_pattern=r"No module named 'h5py'",
-        ),
-        DependencyFix(
-            package_name="bottleneck",
-            reason="Required for optimized array operations",
-            error_pattern=r"No module named 'bottleneck'",
-        ),
-        DependencyFix(
-            package_name="numbagg",
-            reason="Required for numba-accelerated operations",
-            error_pattern=r"No module named 'numbagg'",
-        ),
+        # Add other special cases that can't be caught by general patterns
     ]
 
     def detect_missing_dependencies(self, error_output: str) -> list[DependencyFix]:
-        """Detect missing dependencies from error output.
+        """Detect missing dependencies from error output using general patterns and special cases.
 
         Args:
             error_output: Combined stdout/stderr from test execution
@@ -102,16 +88,97 @@ class AutoDependencyFixer:
             List of dependency fixes to apply
         """
         fixes_needed = []
+        detected_packages = set()  # Track to avoid duplicates
 
-        for fix in self.DEPENDENCY_FIXES:
-            if re.search(fix.error_pattern, error_output, re.IGNORECASE):
+        # First, check special cases that need custom handling
+        for fix in self.SPECIAL_CASES:
+            if re.search(fix.error_pattern, error_output, re.IGNORECASE) and fix.package_name not in detected_packages:
                 fixes_needed.append(fix)
+                detected_packages.add(fix.package_name)
                 console.print(
                     f"[yellow]🔧 Detected missing dependency: {fix.package_name}[/yellow]"
                 )
                 console.print(f"[dim]   Reason: {fix.reason}[/dim]")
 
+        # Then, use general patterns to detect other missing dependencies
+        for pattern, reason_template in self.GENERAL_PATTERNS:
+            matches = re.findall(pattern, error_output, re.IGNORECASE)
+            for match in matches:
+                # Clean up the matched package name
+                package_name = match.strip().lower()
+
+                # Apply package mapping if needed
+                mapped_package = self.PACKAGE_MAPPING.get(match, package_name)
+
+                if mapped_package not in detected_packages:
+                    fix = DependencyFix(
+                        package_name=mapped_package,
+                        reason=f"{reason_template} for '{match}'",
+                        error_pattern=pattern  # Not used, just for completeness
+                    )
+                    fixes_needed.append(fix)
+                    detected_packages.add(mapped_package)
+                    console.print(
+                        f"[yellow]🔧 Detected missing dependency: {mapped_package}[/yellow]"
+                    )
+                    console.print(f"[dim]   Reason: {fix.reason}[/dim]")
+
+        # Finally, try domain-specific interpreters for application errors
+        for pattern, package_template, reason_template in self.DOMAIN_INTERPRETERS:
+            matches = re.findall(pattern, error_output, re.IGNORECASE)
+            for match in matches:
+                # Handle both static package names and regex substitution patterns
+                if package_template.startswith("\\"):
+                    # This is a regex substitution pattern like r"\1"
+                    package_name = re.sub(pattern, package_template, match, flags=re.IGNORECASE)
+                else:
+                    # This is a static package name
+                    package_name = package_template
+
+                # Apply package mapping if needed
+                package_name = self.PACKAGE_MAPPING.get(package_name, package_name)
+
+                # Validate the package exists on PyPI before suggesting it
+                if package_name not in detected_packages and self._validate_package_exists(package_name):
+                    fix = DependencyFix(
+                        package_name=package_name,
+                        reason=f"{reason_template} ('{match}')",
+                        error_pattern=pattern
+                    )
+                    fixes_needed.append(fix)
+                    detected_packages.add(package_name)
+                    console.print(
+                        f"[yellow]🔧 Detected missing dependency: {package_name}[/yellow]"
+                    )
+                    console.print(f"[dim]   Reason: {fix.reason}[/dim]")
+
         return fixes_needed
+
+    def _validate_package_exists(self, package_name: str) -> bool:
+        """Validate that a package exists on PyPI before suggesting it.
+
+        Args:
+            package_name: Name of the package to validate (may include extras like 'dask[array]')
+
+        Returns:
+            True if the package exists, False otherwise
+        """
+        try:
+            # Extract base package name (remove extras)
+            base_package = package_name.split('[')[0]
+
+            # Use pip index to check if package exists (fast and reliable)
+            result = subprocess.run(
+                ["uv", "pip", "index", base_package],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+            # If validation fails, err on the side of caution and allow it
+            # This prevents blocking legitimate packages due to network issues
+            return True
 
     def apply_dependency_fixes(
         self, script_path: Path, fixes: list[DependencyFix]
@@ -125,6 +192,7 @@ class AutoDependencyFixer:
         Returns:
             Path to the modified script (may be a temporary file)
         """
+
         if not fixes:
             return script_path
 

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-import shutil
+import time
 from typing import TYPE_CHECKING, Any
 
-import git
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -18,11 +17,14 @@ from rich.progress import (
 
 from .exceptions import GitError, RepositoryError
 from .parser import ScriptParser
+from .repository_manager import RepositoryManager
 from .runner import TestRunner
 from .utils import create_temp_dir, format_commit_info
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import git
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -90,6 +92,7 @@ class GitBisector:
 
         # Initialize components
         self.parser = ScriptParser(script_path)
+        self.repo_manager = RepositoryManager(repo_url)
         self.repo: git.Repo | None = None
         self.test_runner: TestRunner | None = None
 
@@ -103,9 +106,12 @@ class GitBisector:
             GitError: If there's an error with git operations
             RepositoryError: If there's an error with the repository
         """
+        start_time = time.time()
+        
         try:
-            # Step 1: Clone the repository
-            self._clone_repository()
+            # Step 1: Set up optimized repository
+            self.clone_dir = self.repo_manager.setup_repository(self.good_ref, self.bad_ref)
+            self.repo = self.repo_manager.repo
 
             # Step 2: Validate refs
             self._validate_refs()
@@ -114,7 +120,10 @@ class GitBisector:
             self._setup_test_runner()
 
             # Step 4: Run binary search bisection
-            commit_info = self._run_binary_search()
+            commit_info, commits_tested = self._run_binary_search()
+
+            # Step 5: Show performance report
+            self._show_performance_report(start_time, commits_tested)
 
             if commit_info:
                 return BisectResult(
@@ -128,86 +137,18 @@ class GitBisector:
         finally:
             self._cleanup()
 
-    def _clone_repository(self) -> None:
-        """Clone the repository for bisection with optimized history fetching."""
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Cloning repository (shallow)...", total=None)
-
-            try:
-                # Clean the URL for git clone
-                clone_url = self.repo_url
-                if clone_url.startswith("git+"):
-                    clone_url = clone_url[4:]  # Remove git+ prefix
-
-                logger.info(f"Shallow cloning {clone_url} to {self.clone_dir}")
-
-                # First do a shallow clone to minimize initial download
-                self.repo = git.Repo.clone_from(clone_url, self.clone_dir, depth=1)
-
-                # Enable sparse-checkout to only get commit metadata, not blobs
-                progress.update(
-                    task, description="Optimizing for commit-only access..."
-                )
-                self.repo.git.config("core.sparseCheckout", "true")
-                sparse_checkout_path = (
-                    self.clone_dir / ".git" / "info" / "sparse-checkout"
-                )
-                sparse_checkout_path.write_text(
-                    "", encoding="utf-8"
-                )  # Empty = no files
-
-                progress.update(task, description="Fetching commit history...")
-
-                # Fetch commit history without blobs using --filter=blob:none
-                # This dramatically reduces download size by only getting commits
-                try:
-                    self.repo.git.fetch("origin", self.good_ref, "--filter=blob:none")
-                except git.GitCommandError:
-                    # Fallback to normal fetch if filter not supported
-                    self.repo.git.fetch("origin", self.good_ref)
-
-                try:
-                    self.repo.git.fetch("origin", self.bad_ref, "--filter=blob:none")
-                except git.GitCommandError:
-                    # Fallback to normal fetch if filter not supported
-                    self.repo.git.fetch("origin", self.bad_ref)
-
-                # Get full history between the refs for bisection
-                progress.update(task, description="Fetching bisection range...")
-                try:
-                    # Fetch the commit range we need for bisection with blob filtering
-                    self.repo.git.fetch(
-                        "origin",
-                        f"{self.good_ref}..{self.bad_ref}",
-                        "--filter=blob:none",
-                    )
-                except git.GitCommandError:
-                    # If range fetch fails, unshallow as fallback
-                    self.repo.git.fetch("--unshallow")
-
-                progress.update(task, description="✅ Repository ready for bisection")
-
-            except Exception as e:
-                raise RepositoryError(f"Failed to clone repository: {e}") from e
 
     def _validate_refs(self) -> None:
         """Validate that the good and bad refs exist in the repository."""
-        if not self.repo:
-            raise RepositoryError("Repository not initialized")
-
         try:
-            # Check if refs exist
-            good_commit = self.repo.commit(self.good_ref)
-            bad_commit = self.repo.commit(self.bad_ref)
+            # Use repository manager to resolve references
+            good_hash = self.repo_manager.resolve_reference(self.good_ref)
+            bad_hash = self.repo_manager.resolve_reference(self.bad_ref)
 
-            console.print(f"✅ Good ref '{self.good_ref}' → {good_commit.hexsha[:12]}")
-            console.print(f"❌ Bad ref '{self.bad_ref}' → {bad_commit.hexsha[:12]}")
+            console.print(f"✅ Good ref '{self.good_ref}' → {good_hash[:12]}")
+            console.print(f"❌ Bad ref '{self.bad_ref}' → {bad_hash[:12]}")
 
-        except git.BadName as e:
+        except ValueError as e:
             raise GitError(f"Invalid git reference: {e}") from e
 
     def _setup_test_runner(self) -> None:
@@ -225,18 +166,10 @@ class GitBisector:
             raise RepositoryError("Repository not initialized")
 
         try:
-            # Get the commit range using git rev-list
-            # This gives us commits from good_ref to bad_ref in reverse chronological order
-            commit_shas = (
-                self.repo.git.rev_list(
-                    f"{self.good_ref}..{self.bad_ref}",
-                    "--reverse",  # Get them in chronological order (oldest first)
-                )
-                .strip()
-                .split("\n")
-            )
+            # Use repository manager to get commit range efficiently
+            commit_shas = self.repo_manager.get_commit_range(self.good_ref, self.bad_ref)
 
-            if not commit_shas or commit_shas == [""]:
+            if not commit_shas:
                 raise GitError(
                     f"No commits found between {self.good_ref} and {self.bad_ref}"
                 )
@@ -247,7 +180,7 @@ class GitBisector:
             logger.info(f"Found {len(commits)} commits to bisect")
             return commits
 
-        except git.GitCommandError as e:
+        except ValueError as e:
             raise GitError(f"Failed to get commit range: {e}") from e
 
     def _test_commit(self, commit: git.Commit) -> bool | None:
@@ -271,7 +204,7 @@ class GitBisector:
             logger.warning(f"Error testing commit {commit.hexsha[:12]}: {e}")
             return None  # Untestable
 
-    def _run_binary_search(self) -> dict[str, Any] | None:
+    def _run_binary_search(self) -> tuple[dict[str, Any] | None, int]:
         """Run binary search bisection to find the first bad commit."""
         try:
             # Get the commit range
@@ -279,7 +212,7 @@ class GitBisector:
 
             if not commits:
                 console.print("[yellow]⚠️ No commits found in range[/yellow]")
-                return None
+                return None, 0
 
             console.print(
                 f"[dim]Found {len(commits)} commits between {self.good_ref} and {self.bad_ref}[/dim]"
@@ -438,11 +371,10 @@ class GitBisector:
 
     def _cleanup(self) -> None:
         """Clean up resources after bisection."""
-        if not self.keep_clone and self.clone_dir.exists():
-            try:
-                shutil.rmtree(self.clone_dir)
-                logger.debug(f"Cleaned up clone directory: {self.clone_dir}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up clone directory: {e}")
+        if self.test_runner:
+            self.test_runner.cleanup()
+
+        if not self.keep_clone:
+            self.repo_manager.cleanup()
         elif self.keep_clone:
             console.print(f"[dim]📁 Repository kept at: {self.clone_dir}[/dim]")

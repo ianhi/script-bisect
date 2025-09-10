@@ -555,7 +555,9 @@ def _prompt_with_completion(prompt_text: str, choices: list[str]) -> str:
         raise SystemExit(130)
 
 
-def prompt_for_code_block(code_blocks: list[CodeBlock]) -> CodeBlock:
+def prompt_for_code_block(
+    code_blocks: list[CodeBlock], auto_select: bool = False
+) -> CodeBlock:
     """Prompt user to select a code block from the extracted blocks.
 
     Args:
@@ -577,6 +579,17 @@ def prompt_for_code_block(code_blocks: list[CodeBlock]) -> CodeBlock:
             f"[green]📄 Using only code block found in {block.source_location}[/green]"
         )
         return block
+
+    # Auto-select best block when --yes flag is used
+    if auto_select:
+        # Sort by confidence score and prioritize Python scripts
+        best_block = max(
+            code_blocks, key=lambda b: (b.is_python_script, b.confidence_score)
+        )
+        console.print(
+            f"[green]🤖 Auto-selecting best code block from {best_block.source_location} (confidence: {best_block.confidence_score:.2f})[/green]"
+        )
+        return best_block
 
     console.print("\n[bold blue]📄 Select Code Block[/bold blue]")
     console.print(

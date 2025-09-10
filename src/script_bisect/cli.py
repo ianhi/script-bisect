@@ -272,7 +272,7 @@ def _handle_github_url(
         sys.exit(1)
 
     # Step 2: Let user select the code block to use
-    selected_block = prompt_for_code_block(code_blocks)
+    selected_block = prompt_for_code_block(code_blocks, auto_select=yes)
 
     # Step 3: Generate script with PEP 723 metadata
     console.print("[dim]🔧 Generating script with PEP 723 metadata...[/dim]")
@@ -300,7 +300,7 @@ def _handle_github_url(
     try:
         # Step 4: Allow user to edit the script (unless --no-edit)
         if not no_edit:
-            if not editor.edit_script_interactively(script_path):
+            if not editor.edit_script_interactively(script_path, auto_skip=yes):
                 console.print("[yellow]⚠️ Script editing cancelled[/yellow]")
                 return
 
@@ -426,7 +426,7 @@ def _run_bisection(
             # but was added manually - show as option but don't force selection
             if package:
                 console.print(f"  • [dim]{package} (target package)[/dim]")
-                if Confirm.ask(
+                if yes or Confirm.ask(
                     f"Use target package '{package}' for bisection?", default=True
                 ):
                     pass  # Keep the original package

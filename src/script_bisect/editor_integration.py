@@ -189,7 +189,9 @@ class EditorIntegration:
             console.print(f"[red]❌ Failed to launch editor: {e}[/red]")
             return False
 
-    def edit_script_interactively(self, script_path: Path, backup: bool = True) -> bool:
+    def edit_script_interactively(
+        self, script_path: Path, backup: bool = True, auto_skip: bool = False
+    ) -> bool:
         """Launch an interactive editing session for a script.
 
         Args:
@@ -222,6 +224,11 @@ class EditorIntegration:
             console.print(f"[dim]📄 Script has {line_count} lines[/dim]")
         except (OSError, UnicodeDecodeError):
             console.print("[yellow]⚠️ Could not read script content[/yellow]")
+
+        # Auto-skip if requested (e.g., with --yes flag)
+        if auto_skip:
+            console.print("[dim]🤖 Auto-skipping editor, using script as-is[/dim]")
+            return True
 
         # Ask for confirmation
         if not Confirm.ask(

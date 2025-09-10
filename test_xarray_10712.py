@@ -24,7 +24,7 @@ Usage:
 import sys
 
 
-def test_h5netcdf_pickle_issue():
+def test_h5netcdf_pickle_issue() -> bool:
     """Test that h5netcdf datasets can be pickled after opening via s3fs."""
     print("🧪 Testing xarray h5netcdf pickling issue...")
 
@@ -82,7 +82,7 @@ def test_h5netcdf_pickle_issue():
         return False
 
 
-def show_version_info():
+def show_version_info() -> None:
     """Show relevant version information."""
     import sys
 
@@ -120,7 +120,7 @@ def show_version_info():
     print()
 
 
-def main():
+def main() -> bool:
     """Main test function."""
     print("🔬 xarray h5netcdf pickling test (issue #10712)")
     print("=" * 60)
