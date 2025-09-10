@@ -786,7 +786,7 @@ def prompt_for_code_block(
                         f"\n[green]✅ Selected block {index + 1} from {selected_block.source_location}[/green]"
                     )
 
-                    # Show confirmation with preview
+                    # Show info about the selected block
                     console.print(
                         f"[dim]Language: {selected_block.language or 'unknown'}[/dim]"
                     )
@@ -797,11 +797,8 @@ def prompt_for_code_block(
                         f"[dim]Lines: {len([line for line in selected_block.content.split('\n') if line.strip()])}[/dim]"
                     )
 
-                    # Ask for confirmation
-                    if Confirm.ask("Use this code block?", default=True):
-                        return selected_block
-                    else:
-                        continue
+                    # User explicitly selected this block, no need for confirmation
+                    return selected_block
 
             console.print(
                 f"[red]Invalid choice. Please enter a number from 1 to {len(code_blocks)} or 'show N'.[/red]"

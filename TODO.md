@@ -34,6 +34,19 @@ especially when requesting an issue from github there are redundant confirmation
 
 at the end of a run sometimes it's not satistfying because the user had a bad script, or they used the wrong refs. if they had to edit the script to make it work then this is very annoying. We should consider having an option at the end to re-run with different parameters. also if the command is run again with the same input (e.g. same github issue we should cache that and ask the user if they want to use the same script as before)
 
+## Intelligent Caching System - HARD
+
+Implement a comprehensive caching system to dramatically improve performance for repeated bisections. See [CACHING_REQUIREMENTS.md](CACHING_REQUIREMENTS.md) for detailed specifications.
+
+Key areas:
+- Repository caching (avoid repeated clones)
+- Commit list caching (faster range calculation)
+- Script caching (reuse GitHub-generated scripts)
+- uv cache integration (persistent environments)
+- Cache management CLI (info, clean, clear commands)
+
+Expected performance improvement: 5-15x faster for repeated bisections.
+
 ## Agent instructions - HARD
 
 add a flag for --agent that explains to an LLM how to use this tool and how to update the script appropriately (i.e. with exit code) so that it reproduces the issue.

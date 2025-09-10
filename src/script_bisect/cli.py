@@ -14,6 +14,7 @@ from rich.table import Table
 from . import __version__
 from .bisector import GitBisector
 from .editor_integration import EditorIntegration
+from .end_state_menu import handle_end_state_options
 from .exceptions import ScriptBisectError
 from .interactive import (
     confirm_bisection_params,
@@ -511,6 +512,22 @@ def _run_bisection(
         console.print(
             "\n[yellow]⚠️ Bisection completed but no clear result found[/yellow]"
         )
+
+    # Offer end state options for re-running
+    handle_end_state_options(
+        script_path=script_path,
+        package=package,
+        good_ref=good_ref,
+        bad_ref=bad_ref,
+        repo_url=repo_url,
+        test_command=test_command,
+        inverse=inverse,
+        keep_clone=keep_clone,
+        verify_endpoints=verify_endpoints,
+        dry_run=dry_run,
+        full_traceback=full_traceback,
+        yes=yes,
+    )
 
 
 def _validate_and_fix_refs(
