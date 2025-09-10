@@ -141,3 +141,7 @@ temp_repos/
 # Test artifacts
 test_output/
 temp_test_*
+
+# Zarr data files
+*.zarr/
+*.zarr
