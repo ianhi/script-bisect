@@ -2,7 +2,7 @@
 
 import sys
 
-sys.path.insert(0, 'src')
+sys.path.insert(0, "src")
 
 from script_bisect.issue_importer import CodeBlock
 from script_bisect.script_autocorrect import ScriptAutoCorrector
@@ -22,7 +22,7 @@ code_block = CodeBlock(
     language="python",
     source_location="test",
     is_python_script=True,
-    confidence_score=1.0
+    confidence_score=1.0,
 )
 
 corrected_block, fixes = corrector.auto_correct_code_block(code_block)

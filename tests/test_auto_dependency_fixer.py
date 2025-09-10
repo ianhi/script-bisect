@@ -68,7 +68,7 @@ class TestAutoDependencyFixer:
         ValueError: unrecognized engine 'h5netcdf' must be one of your available engines
         """
 
-        with patch.object(fixer, '_validate_package_exists', return_value=True):
+        with patch.object(fixer, "_validate_package_exists", return_value=True):
             fixes = fixer.detect_missing_dependencies(error_output)
 
         assert len(fixes) == 1
@@ -90,7 +90,7 @@ class TestAutoDependencyFixer:
         assert len(dask_fixes) >= 1
         assert any(fix.package_name == "dask[array]" for fix in dask_fixes)
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_package_validation_success(self, mock_run):
         """Test that package validation works when package exists."""
         mock_run.return_value = Mock(returncode=0)
@@ -99,13 +99,10 @@ class TestAutoDependencyFixer:
         assert fixer._validate_package_exists("numpy") is True
 
         mock_run.assert_called_once_with(
-            ["uv", "pip", "index", "numpy"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            ["uv", "pip", "index", "numpy"], capture_output=True, text=True, timeout=10
         )
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_package_validation_failure(self, mock_run):
         """Test that package validation fails when package doesn't exist."""
         mock_run.return_value = Mock(returncode=1)
@@ -113,7 +110,7 @@ class TestAutoDependencyFixer:
         fixer = AutoDependencyFixer()
         assert fixer._validate_package_exists("nonexistent-package") is False
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_package_validation_timeout_fallback(self, mock_run):
         """Test that validation falls back to True on timeout/error."""
         mock_run.side_effect = subprocess.TimeoutExpired(["uv"], 10)
@@ -125,7 +122,7 @@ class TestAutoDependencyFixer:
         """Test package validation correctly handles extras."""
         fixer = AutoDependencyFixer()
 
-        with patch('subprocess.run') as mock_run:
+        with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(returncode=0)
 
             # Should extract base package name
@@ -137,7 +134,7 @@ class TestAutoDependencyFixer:
                 ["uv", "pip", "index", "dask"],  # extras stripped
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
 
     def test_no_dependencies_detected(self):
@@ -191,7 +188,7 @@ class TestAutoDependencyFixer:
         ValueError: The cftime package is required for working with non-standard calendars
         """
 
-        with patch.object(fixer, '_validate_package_exists', return_value=True):
+        with patch.object(fixer, "_validate_package_exists", return_value=True):
             fixes = fixer.detect_missing_dependencies(error_output)
 
         package_names = [fix.package_name for fix in fixes]
@@ -227,15 +224,19 @@ if __name__ == "__main__":
     main()
 '''
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, encoding="utf-8"
+        ) as f:
             f.write(script_content)
             script_path = Path(f.name)
 
         try:
             # Create some dependency fixes
             fixes = [
-                DependencyFix("cftime", "Required for calendar decoding", "cftime pattern"),
-                DependencyFix("dask[array]", "Required for chunks", "dask pattern")
+                DependencyFix(
+                    "cftime", "Required for calendar decoding", "cftime pattern"
+                ),
+                DependencyFix("dask[array]", "Required for chunks", "dask pattern"),
             ]
 
             # Apply the fixes
@@ -245,7 +246,7 @@ if __name__ == "__main__":
             assert result_path == script_path
 
             # Read the modified content
-            modified_content = script_path.read_text(encoding='utf-8')
+            modified_content = script_path.read_text(encoding="utf-8")
 
             # Verify dependencies were added
             assert "cftime" in modified_content
@@ -274,14 +275,18 @@ if __name__ == "__main__":
     main()
 '''
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, encoding="utf-8"
+        ) as f:
             f.write(script_content)
             script_path = Path(f.name)
 
         try:
             # Create some dependency fixes
             fixes = [
-                DependencyFix("cftime", "Required for calendar decoding", "cftime pattern")
+                DependencyFix(
+                    "cftime", "Required for calendar decoding", "cftime pattern"
+                )
             ]
 
             # Apply the fixes
@@ -291,7 +296,7 @@ if __name__ == "__main__":
             assert result_path == script_path
 
             # Read the modified content
-            modified_content = script_path.read_text(encoding='utf-8')
+            modified_content = script_path.read_text(encoding="utf-8")
 
             # Verify dependencies were added
             assert "cftime" in modified_content
@@ -323,7 +328,9 @@ if __name__ == "__main__":
     main()
 '''
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, encoding="utf-8"
+        ) as f:
             f.write(script_content)
             script_path = Path(f.name)
 
@@ -338,7 +345,7 @@ if __name__ == "__main__":
             assert fixed_path == script_path
 
             # Verify the dependency was added
-            modified_content = script_path.read_text(encoding='utf-8')
+            modified_content = script_path.read_text(encoding="utf-8")
             assert "cftime" in modified_content
 
         finally:
@@ -375,13 +382,15 @@ if __name__ == "__main__":
 """Test script"""
 '''
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, encoding="utf-8"
+        ) as f:
             f.write(script_content)
             script_path = Path(f.name)
 
         try:
             fixer.apply_dependency_fixes(script_path, fixes)
-            modified_content = script_path.read_text(encoding='utf-8')
+            modified_content = script_path.read_text(encoding="utf-8")
 
             # Should only have one occurrence of dask[array]
             assert modified_content.count('"dask[array]"') == 1

@@ -72,9 +72,7 @@ class RepositoryManager:
             # Create temporary directory for the repository
             self.clone_dir = Path(tempfile.mkdtemp(prefix="script_bisect_repo_"))
 
-            task = progress.add_task("Setting up optimized repository...", total=None)
-
-            logger.info(f"Setting up repository from {self.clone_url}")
+            task = progress.add_task("Setting up repository...", total=None)
 
             try:
                 # Step 1: Initialize empty repository (no initial clone)

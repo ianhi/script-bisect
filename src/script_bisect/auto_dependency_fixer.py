@@ -34,13 +34,19 @@ class AutoDependencyFixer:
     GENERAL_PATTERNS = [
         # Standard import errors - captures package name from error
         (r"No module named ['\"]([^'\"]+)['\"]", "Import error"),
-        (r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]", "Module not found"),
+        (
+            r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]",
+            "Module not found",
+        ),
         (r"ImportError: No module named ['\"]([^'\"]+)['\"]", "Import failure"),
         # Engine/backend not available patterns
         (r"unrecognized engine ['\"]([^'\"]+)['\"]", "Engine not available"),
         (r"engine ['\"]([^'\"]+)['\"] is not available", "Engine not available"),
         # Chunk manager patterns
-        (r"chunk manager ['\"]([^'\"]+)['\"] is not available", "Chunk manager missing"),
+        (
+            r"chunk manager ['\"]([^'\"]+)['\"] is not available",
+            "Chunk manager missing",
+        ),
         # General "X is not installed" patterns
         (r"['\"]([^'\"]+)['\"] is not installed", "Package not installed"),
         (r"Please install ['\"]([^'\"]+)['\"]", "Installation required"),
@@ -60,12 +66,28 @@ class AutoDependencyFixer:
     # Domain-specific error interpreters - these translate application errors into missing dependencies
     DOMAIN_INTERPRETERS = [
         # xarray/backend engine errors -> missing backend packages
-        (r"unrecognized engine ['\"]([^'\"]+)['\"]", r"\1", "Backend engine not available"),
-        (r"engine ['\"]([^'\"]+)['\"] is not available", r"\1", "Backend engine missing"),
+        (
+            r"unrecognized engine ['\"]([^'\"]+)['\"]",
+            r"\1",
+            "Backend engine not available",
+        ),
+        (
+            r"engine ['\"]([^'\"]+)['\"] is not available",
+            r"\1",
+            "Backend engine missing",
+        ),
         # chunk manager errors -> dask variants
-        (r"chunk manager ['\"]dask['\"] is not available", "dask[array]", "Dask array support needed"),
+        (
+            r"chunk manager ['\"]dask['\"] is not available",
+            "dask[array]",
+            "Dask array support needed",
+        ),
         # matplotlib backend errors
-        (r"backend ['\"]([^'\"]+)['\"] is not available", r"\1", "Backend not available"),
+        (
+            r"backend ['\"]([^'\"]+)['\"] is not available",
+            r"\1",
+            "Backend not available",
+        ),
     ]
 
     # Special error messages that need custom handling (not covered by general patterns)
@@ -92,13 +114,12 @@ class AutoDependencyFixer:
 
         # First, check special cases that need custom handling
         for fix in self.SPECIAL_CASES:
-            if re.search(fix.error_pattern, error_output, re.IGNORECASE) and fix.package_name not in detected_packages:
+            if (
+                re.search(fix.error_pattern, error_output, re.IGNORECASE)
+                and fix.package_name not in detected_packages
+            ):
                 fixes_needed.append(fix)
                 detected_packages.add(fix.package_name)
-                console.print(
-                    f"[yellow]🔧 Detected missing dependency: {fix.package_name}[/yellow]"
-                )
-                console.print(f"[dim]   Reason: {fix.reason}[/dim]")
 
         # Then, use general patterns to detect other missing dependencies
         for pattern, reason_template in self.GENERAL_PATTERNS:
@@ -114,7 +135,7 @@ class AutoDependencyFixer:
                     fix = DependencyFix(
                         package_name=mapped_package,
                         reason=f"{reason_template} for '{match}'",
-                        error_pattern=pattern  # Not used, just for completeness
+                        error_pattern=pattern,  # Not used, just for completeness
                     )
                     fixes_needed.append(fix)
                     detected_packages.add(mapped_package)
@@ -130,7 +151,9 @@ class AutoDependencyFixer:
                 # Handle both static package names and regex substitution patterns
                 if package_template.startswith("\\"):
                     # This is a regex substitution pattern like r"\1"
-                    package_name = re.sub(pattern, package_template, match, flags=re.IGNORECASE)
+                    package_name = re.sub(
+                        pattern, package_template, match, flags=re.IGNORECASE
+                    )
                 else:
                     # This is a static package name
                     package_name = package_template
@@ -139,11 +162,14 @@ class AutoDependencyFixer:
                 package_name = self.PACKAGE_MAPPING.get(package_name, package_name)
 
                 # Validate the package exists on PyPI before suggesting it
-                if package_name not in detected_packages and self._validate_package_exists(package_name):
+                if (
+                    package_name not in detected_packages
+                    and self._validate_package_exists(package_name)
+                ):
                     fix = DependencyFix(
                         package_name=package_name,
                         reason=f"{reason_template} ('{match}')",
-                        error_pattern=pattern
+                        error_pattern=pattern,
                     )
                     fixes_needed.append(fix)
                     detected_packages.add(package_name)
@@ -165,17 +191,21 @@ class AutoDependencyFixer:
         """
         try:
             # Extract base package name (remove extras)
-            base_package = package_name.split('[')[0]
+            base_package = package_name.split("[")[0]
 
             # Use pip index to check if package exists (fast and reliable)
             result = subprocess.run(
                 ["uv", "pip", "index", base_package],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
             return result.returncode == 0
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        except (
+            subprocess.TimeoutExpired,
+            subprocess.SubprocessError,
+            FileNotFoundError,
+        ):
             # If validation fails, err on the side of caution and allow it
             # This prevents blocking legitimate packages due to network issues
             return True
@@ -244,7 +274,7 @@ class AutoDependencyFixer:
         new_deps = list({fix.package_name for fix in fixes})
         all_deps = existing_deps + [dep for dep in new_deps if dep not in existing_deps]
 
-        console.print(f"[green]📦 Adding dependencies: {', '.join(new_deps)}[/green]")
+        # Dependencies already shown in fix_and_retry message
 
         # Create new dependencies block
         deps_lines = ["# dependencies = ["]
@@ -278,7 +308,7 @@ class AutoDependencyFixer:
         # Write the modified content back to the original file
         try:
             script_path.write_text("\n".join(new_lines), encoding="utf-8")
-            console.print(f"[green]✅ Updated script: {script_path.name}[/green]")
+            # Script update message removed for cleaner output
             return script_path
         except OSError as e:
             console.print(f"[red]❌ Failed to write to script: {e}[/red]")
@@ -313,11 +343,11 @@ class AutoDependencyFixer:
         if not fixes:
             return None, False
 
+        # Show consolidated dependency fix message
+        dep_names = [fix.package_name for fix in fixes]
         console.print(
-            f"[cyan]🔄 Attempting to fix {len(fixes)} dependency issue(s)...[/cyan]"
+            f"[cyan]🔧 Auto-fixing dependencies: {', '.join(dep_names)}[/cyan]"
         )
 
         self.apply_dependency_fixes(script_path, fixes)
-
-        console.print("[cyan]🔄 Re-running test with fixed dependencies...[/cyan]")
         return script_path, True

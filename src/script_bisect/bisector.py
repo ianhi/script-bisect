@@ -180,32 +180,39 @@ class GitBisector:
             # Convert SHAs to commit objects
             commits = [self.repo.commit(sha) for sha in commit_shas]
 
-            logger.info(f"Found {len(commits)} commits to bisect")
+            # Commit count shown in user-friendly format below
             return commits
 
         except ValueError as e:
             raise GitError(f"Failed to get commit range: {e}") from e
 
-    def _test_commit(self, commit: git.Commit) -> bool | None:
+    def _test_commit(self, commit: git.Commit) -> tuple[bool | None, str | None]:
         """Test a specific commit.
 
         Returns:
-            True if test passes (good), False if test fails (bad), None if untestable
+            Tuple of (result, error_message) where:
+            - result: True if test passes (good), False if test fails (bad), None if untestable
+            - error_message: Error description if test failed, None if passed or untestable
         """
         if not self.test_runner:
             raise RepositoryError("Test runner not initialized")
 
         try:
-            success = self.test_runner.test_commit(commit.hexsha)
+            result = self.test_runner.test_commit(commit.hexsha, return_error=True)
+            if isinstance(result, tuple):
+                success, error_msg = result
+            else:
+                # This shouldn't happen when return_error=True, but handle it
+                success, error_msg = result, None
 
             # Handle inverse mode
             if self.inverse:
-                return not success
-            return success
+                return (not success if success is not None else None), error_msg
+            return success, error_msg
 
         except Exception as e:
             logger.warning(f"Error testing commit {commit.hexsha[:12]}: {e}")
-            return None  # Untestable
+            return None, f"Test execution error: {e}"
 
     def _run_binary_search(self) -> tuple[dict[str, Any] | None, int]:
         """Run binary search bisection to find the first bad commit."""
@@ -229,34 +236,47 @@ class GitBisector:
                 console.print(f"    Testing {self.good_ref}...")
                 assert self.repo  # For mypy
                 good_commit = self.repo.commit(self.good_ref)
-                good_result = self._test_commit(good_commit)
+                good_result, good_error = self._test_commit(good_commit)
                 if good_result is False:
                     console.print(
                         f"[red]❌ Good ref '{self.good_ref}' is not actually good![/red]"
                     )
                     return None, 0
                 elif good_result is None:
-                    console.print(
-                        f"[yellow]⚠️ Could not test good ref '{self.good_ref}' - continuing anyway[/yellow]"
-                    )
+                    if good_error:
+                        console.print(
+                            f"[yellow]⚠️ Could not test good ref '{self.good_ref}': {good_error}[/yellow]"
+                        )
+                    else:
+                        console.print(
+                            f"[yellow]⚠️ Could not test good ref '{self.good_ref}' - continuing anyway[/yellow]"
+                        )
                 else:
                     console.print(f"    ✅ {self.good_ref} is good")
 
                 # Check that bad_ref is actually bad
                 console.print(f"    Testing {self.bad_ref}...")
                 bad_commit = self.repo.commit(self.bad_ref)
-                bad_result = self._test_commit(bad_commit)
+                bad_result, bad_error = self._test_commit(bad_commit)
                 if bad_result is True:
                     console.print(
                         f"[red]❌ Bad ref '{self.bad_ref}' is not actually bad![/red]"
                     )
                     return None, 0
                 elif bad_result is None:
-                    console.print(
-                        f"[yellow]⚠️ Could not test bad ref '{self.bad_ref}' - continuing anyway[/yellow]"
-                    )
+                    if bad_error:
+                        console.print(
+                            f"[yellow]⚠️ Could not test bad ref '{self.bad_ref}': {bad_error}[/yellow]"
+                        )
+                    else:
+                        console.print(
+                            f"[yellow]⚠️ Could not test bad ref '{self.bad_ref}' - continuing anyway[/yellow]"
+                        )
                 else:
-                    console.print(f"    ❌ {self.bad_ref} is bad")
+                    if bad_error:
+                        console.print(f"    ❌ {self.bad_ref} is bad - {bad_error}")
+                    else:
+                        console.print(f"    ❌ {self.bad_ref} is bad")
             else:
                 console.print("\n[dim]⏩ Skipping endpoint verification[/dim]")
 
@@ -348,11 +368,14 @@ class GitBisector:
 
                 console.print(f"  🔍 Testing commit {commit.hexsha[:12]} ({subject})")
 
-                result = self._test_commit(commit)
+                result, error_msg = self._test_commit(commit)
 
                 if result is None:
                     # Untestable commit, skip it
-                    console.print("    ⚠️  Skipping untestable commit")
+                    if error_msg:
+                        console.print(f"    ⚠️  Skipping untestable commit: {error_msg}")
+                    else:
+                        console.print("    ⚠️  Skipping untestable commit")
                     # Remove this commit and continue
                     commits.pop(mid)
                     if mid <= (left + right) // 2:
@@ -363,7 +386,10 @@ class GitBisector:
                     console.print("    ✅ Good")
                     left = mid + 1
                 else:  # Bad commit
-                    console.print("    ❌ Bad")
+                    if error_msg:
+                        console.print(f"    ❌ Bad - {error_msg}")
+                    else:
+                        console.print("    ❌ Bad")
                     first_bad = commit
                     right = mid - 1
 

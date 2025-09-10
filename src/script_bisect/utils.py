@@ -28,6 +28,17 @@ def setup_logging(verbose: bool = False) -> None:
         handlers=[RichHandler(console=console, rich_tracebacks=True)],
     )
 
+    # Only suppress third-party DEBUG logging when NOT in verbose mode
+    if not verbose:
+        # GitPython generates excessive DEBUG messages during git operations
+        logging.getLogger("git.cmd").setLevel(logging.WARNING)
+        logging.getLogger("git.util").setLevel(logging.WARNING)
+        logging.getLogger("git.base").setLevel(logging.WARNING)
+
+        # Suppress other potentially noisy loggers
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("requests").setLevel(logging.WARNING)
+
 
 def create_temp_dir(prefix: str = "script_bisect_") -> Path:
     """Create a temporary directory for bisection work.

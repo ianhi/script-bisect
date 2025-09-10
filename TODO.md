@@ -1,17 +1,6 @@
 
 ## Styling
 
-If we fail to find a bad commit we still report success:
-
-```
-    ✅ Good
-  ✨ Bisection complete! ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100%
-
-⚠️ Could not find a clear first bad commit
-
-✨ Bisection completed successfully!
-```
-
 Commit success or failure should be on the same line as the commit message (replacing the magnifiying glass)
 
     ✅ Good
@@ -21,27 +10,25 @@ Commit success or failure should be on the same line as the commit message (repl
 value (#10596))
     ✅ Good
 
-## UI
-
-Continue with edited script. should show the script, and give the option to go back to editing
-
-## Cloning
-
-We already get tags for the autocomplete, but then once we start the process we do a shallow clone. this seems redundant. Let's make sure instead of a shallow clone we are doing fetching rev log without the blobs
-
-Initially during bisect there are weird logging outputs:
-
-🔍 Auto-detecting repository URL...
-⠋ Cloning repository (shallow)...[17:34:32] INFO     Shallow cloning <https://github.com/pydata/xarray.git> to             bisector.py:146
-                    /var/folders/tc/fkgp35zn7z913f9cmsxcl6pc0000gn/T/script_bisect_repo
-                    _jen2ig7b
-⠼ ✅ Repository ready for bisection
-
-we should not have those for a consistent visual style
-
 ## Error Display
 
 Simplify the error display to the user - it should only show one line with the actual error message instead of full stack traces and multiple lines of debug output.
+
+## Output
+
+There are too many outputs making it hard to parse
+
+## Progress bar display issue
+
+When auto-adding dependencies, the progress bar display gets broken up by console.print statements from dependency fixing. The progress bar shows multiple lines mixed with dependency detection messages, which breaks the visual continuity of the progress display.
+
+## simplify UI interactions
+
+especially when requesting an issue from github there are redundant confirmation dialogs. for example after choosing a code block it asks again to confirm that we want to use that code block. we should eliminate that step. Also at the point of confirming the bisection we should have clearly indicated keybindings for editing the refs, the script or even what package we are bisecting.
+
+## End State
+
+at the end of a run sometimes it's not satistfying because the user had a bad script, or they used the wrong refs. if they had to edit the script to make it work then this is very annoying. We should consider having an option at the end to re-run with different parameters. also if the command is run again with the same input (e.g. same github issue we should cache that and ask the user if they want to use the same script as before)
 
 ## Agent instructions - HARD
 
