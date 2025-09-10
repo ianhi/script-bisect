@@ -45,51 +45,24 @@ uv run script-bisect --help
 
 ### Try It Now! 🚀
 
-Create this test script and run it to see script-bisect in action:
+Point script-bisect directly at a real GitHub issue:
 
 ```bash
-# Create a test script for a real xarray issue #10712
-cat > test_xarray_10712.py << 'EOF'
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#   "xarray@git+https://github.com/pydata/xarray.git@main",
-#   "numpy",
-# ]
-# ///
-
-import xarray as xr
-import numpy as np
-
-# Test script for xarray issue #10712
-# https://github.com/pydata/xarray/issues/10712
-# Reproduces a regression in xarray's DataArray behavior
-try:
-    # Create a DataArray with coordinates
-    da = xr.DataArray(
-        np.ones((2, 3)),
-        dims=['x', 'y'],
-        coords={'x': [0, 1], 'y': [0, 1, 2]}
-    )
-
-    # This operation should work consistently across versions
-    result = da.isel(x=0)
-
-    # Verify expected behavior
-    assert result.dims == ('y',)
-    assert len(result.coords) == 1
-    print("✅ Test passed!")
-
-except Exception as e:
-    print(f"❌ Test failed: {e}")
-    exit(1)
-EOF
-
-# Run the bisection to find when the issue was introduced
-uvx script-bisect test_xarray_10712.py xarray v2025.07.0 v2025.08.0 --yes
+# Bisect a real xarray issue directly from GitHub
+uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray v2025.07.1 v2025.08.0
 ```
 
-This will bisect real xarray issue [#10712](https://github.com/pydata/xarray/issues/10712) and show you exactly which commit introduced the regression!
+That's it! script-bisect will:
+1. **Extract** the code from the GitHub issue
+2. **Create** a test script automatically
+3. **Detect** the package and repository
+4. **Run** the bisection to find the problematic commit
+
+For xarray issue [#10712](https://github.com/pydata/xarray/issues/10712), this will show you exactly which commit introduced the regression!
+
+### Manual Script Method
+
+You can also create your own test script:
 
 ### 1. Create Your Own Script
 
@@ -360,10 +333,6 @@ Cache locations follow XDG Base Directory standards:
 
 ### Roadmap 🗺️
 
-- **GitHub Issue Integration**: Point at a GitHub issue to automatically extract and test script blocks
-  ```bash
-  script-bisect --issue https://github.com/pydata/xarray/issues/1234
-  ```
 - **Multiple Package Bisection**: Bisect multiple related packages simultaneously
 - **PyPI Metadata Lookup**: Automatic repository detection for more packages
 - **Regression Test Suite**: Generate test suites from bisection results

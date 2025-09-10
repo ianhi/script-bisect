@@ -56,9 +56,9 @@ dev = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/user/script-bisect#readme"
-Issues = "https://github.com/user/script-bisect/issues"
-Source = "https://github.com/user/script-bisect"
+Documentation = "https://github.com/ianhi/script-bisect#readme"
+Issues = "https://github.com/ianhi/script-bisect/issues"
+Source = "https://github.com/ianhi/script-bisect"
 
 [project.scripts]
 script-bisect = "script_bisect.cli:main"
