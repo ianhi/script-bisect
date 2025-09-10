@@ -134,8 +134,8 @@ def run_bisection_with_params(
     # Validate and potentially swap refs
     good_ref, bad_ref = validate_and_fix_refs(good_ref, bad_ref, inverse)
 
-    # Show confirmation
-    if not confirm_bisection_params(
+    # Show confirmation and allow parameter editing
+    should_start, updated_params = confirm_bisection_params(
         script_path,
         package,
         good_ref,
@@ -144,9 +144,26 @@ def run_bisection_with_params(
         test_command,
         inverse,
         auto_confirm=yes,
-    ):
+    )
+
+    if not should_start:
         console.print("[yellow]⚠️ Bisection cancelled[/yellow]")
         return
+
+    # Apply any parameter changes from user editing
+    package = str(updated_params["package"])
+    good_ref = str(updated_params["good_ref"])
+    bad_ref = str(updated_params["bad_ref"])
+    repo_url = str(updated_params["repo_url"])
+    test_command = (
+        updated_params["test_command"]
+        if updated_params["test_command"] is None
+        else str(updated_params["test_command"])
+    )
+    inverse = bool(updated_params["inverse"])
+
+    # Re-validate refs if they were changed
+    good_ref, bad_ref = validate_and_fix_refs(good_ref, bad_ref, inverse)
 
     # Run the bisection
     bisector = GitBisector(

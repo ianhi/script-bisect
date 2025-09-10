@@ -44,7 +44,7 @@ def test_interpolation_performance() -> bool:
         interp_z = np.linspace(0.1, 0.9, 30)  # Fewer points for faster testing
 
         print("  🔥 Running warmup to handle numba compilation...")
-        # Warmup run to trigger any JIT compilation
+        # Warmup run to trigger y JIT compilation
         warmup_z = np.linspace(0.1, 0.2, 5)  # Small warmup
         _ = da.interp(z=warmup_z)
         print("  🔥 Warmup complete")

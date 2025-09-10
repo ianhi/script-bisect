@@ -24,22 +24,28 @@
 ### Project Structure
 ```
 src/script_bisect/
-├── __init__.py              # Package initialization
-├── cli.py                   # Command-line interface and main entry point
-├── interactive.py           # Interactive prompts and UI (NEW)
-├── parser.py               # PEP 723 script metadata parsing
-├── bisector.py             # Core git bisection logic
-├── runner.py               # Test execution and process management
-├── utils.py                # Shared utilities and helpers
-└── exceptions.py           # Custom exception definitions
+├── __init__.py                  # Package initialization
+├── cli.py                      # Command-line interface and main entry point
+├── interactive.py              # Interactive prompts and UI
+├── parser.py                   # PEP 723 script metadata parsing
+├── bisector.py                 # Core git bisection logic
+├── runner.py                   # Test execution and process management
+├── repository_manager.py       # Git repository operations with optimizations (NEW)
+├── end_state_menu.py           # Post-bisection options and re-runs (NEW)
+├── bisection_orchestrator.py   # High-level bisection coordination (NEW)
+├── validation.py               # Reference validation and fixing (NEW)
+├── cli_display.py              # Display utilities and formatting (NEW)
+├── utils.py                    # Shared utilities and helpers
+└── exceptions.py               # Custom exception definitions
 
 tests/
-├── test_*.py               # Comprehensive test coverage
-├── fixtures/               # Test data and mock scripts
-└── integration/            # End-to-end integration tests
+├── test_*.py                   # Comprehensive test coverage
+├── test_repository_manager.py  # Repository management tests (NEW)
+├── fixtures/                   # Test data and mock scripts
+└── integration/                # End-to-end integration tests
 
-examples/                   # Example PEP 723 scripts for testing
-.github/workflows/          # CI/CD automation (NEW)
+examples/                       # Example PEP 723 scripts for testing
+.github/workflows/              # CI/CD automation
 ```
 
 ## Core Components
@@ -76,6 +82,39 @@ examples/                   # Example PEP 723 scripts for testing
 - **uv Integration**: Uses uv for fast, reliable package management
 - **Exit Codes**: Proper git bisect exit codes (0=good, 1=bad, 125=skip)
 - **Output Capture**: Captures and processes test execution output
+- **Error Summarization**: Intelligent error extraction and user-friendly display
+
+### 6. Repository Manager (repository_manager.py) - NEW FEATURE
+- **Optimized Cloning**: Efficient repository setup with sparse checkout
+- **Blob Filtering**: Uses git filters to minimize bandwidth usage
+- **Reference Resolution**: Smart resolution with similarity suggestions
+- **Performance Focus**: Minimal disk usage and network requests
+- **Cleanup Management**: Automatic temporary directory management
+
+### 7. End State Menu (end_state_menu.py) - NEW FEATURE
+- **Post-Bisection Options**: Interactive menu after completion
+- **Parameter Re-runs**: Re-run with different refs, scripts, or settings
+- **Editor Integration**: Automatic editor launching for script modification
+- **Session Continuity**: Seamless transition between multiple bisections
+- **User Experience**: Eliminates need to restart entire process
+
+### 8. Bisection Orchestrator (bisection_orchestrator.py) - NEW FEATURE
+- **High-Level Coordination**: Manages the full bisection workflow
+- **Component Integration**: Coordinates parser, bisector, UI components
+- **Parameter Management**: Handles complex parameter passing and validation
+- **Workflow Abstraction**: Separates workflow logic from UI concerns
+
+### 9. Validation (validation.py) - NEW FEATURE
+- **Reference Validation**: Comprehensive git reference checking
+- **Smart Swapping**: Detects and offers to fix swapped good/bad refs
+- **Version Intelligence**: Understands semantic versioning patterns
+- **User Guidance**: Provides helpful suggestions for common mistakes
+
+### 10. CLI Display (cli_display.py) - NEW FEATURE
+- **Modular UI**: Separated display logic from business logic
+- **Rich Formatting**: Professional tables, panels, and progress displays
+- **Confirmation Dialogs**: Standardized user confirmation patterns
+- **Reusable Components**: Shared display utilities across modules
 
 ## Key Features
 
@@ -84,10 +123,14 @@ examples/                   # Example PEP 723 scripts for testing
 2. **Interactive UI**: Smart prompts with tab completion and validation
 3. **PEP 723 Integration**: Native support for inline script metadata
 4. **Repository Auto-detection**: Automatic discovery of package git repositories
-5. **Reference Validation**: Smart detection and fixing of swapped good/bad refs
+5. **Reference Validation**: Smart detection and fixing of swapped good/bad refs with suggestions
 6. **Fuzzy Completion**: Advanced autocompletion for git references
-7. **CI/CD Integration**: GitHub Actions workflow for testing
-8. **Cross-platform**: Works on macOS, Linux, and Windows
+7. **End State Options**: Post-bisection menu for re-running with different parameters (NEW)
+8. **Optimized Performance**: Efficient repository operations with blob filtering (NEW)
+9. **Error Intelligence**: Smart error summarization and full traceback options (NEW)
+10. **Modular Architecture**: Clean separation of concerns for maintainability (NEW)
+11. **CI/CD Integration**: GitHub Actions workflow for testing
+12. **Cross-platform**: Works on macOS, Linux, and Windows
 
 ### Usage Patterns
 ```bash
@@ -128,10 +171,13 @@ script-bisect script.py pandas v1.0.0 main --inverse --verbose
 - **Coverage Reporting**: Code coverage tracking and reporting
 - **Dependency Caching**: Fast builds with uv caching
 
-## Recent Improvements (Interactive UI Feature)
+## Recent Major Improvements
 
-### Major Enhancement
-The recent major update added a complete interactive UI system that transforms the user experience:
+### Phase 1: Interactive UI System (Previously Implemented)
+The first major update added a complete interactive UI system that transforms the user experience:
+
+### Phase 2: End State Options & Modular Refactoring (NEWLY IMPLEMENTED)
+The latest major enhancement adds comprehensive post-bisection workflow options with significant architectural improvements:
 
 #### Before (Rigid CLI)
 ```bash

@@ -13,11 +13,11 @@ from rich.table import Table
 
 from . import __version__
 from .bisector import GitBisector
+from .cli_display import confirm_bisection_params
 from .editor_integration import EditorIntegration
 from .end_state_menu import handle_end_state_options
 from .exceptions import ScriptBisectError
 from .interactive import (
-    confirm_bisection_params,
     prompt_for_code_block,
     prompt_for_package,
     prompt_for_refs,
@@ -468,8 +468,8 @@ def _run_bisection(
     # Validate and potentially swap refs
     good_ref, bad_ref = _validate_and_fix_refs(good_ref, bad_ref, inverse)
 
-    # Show confirmation
-    if not confirm_bisection_params(
+    # Show confirmation and allow parameter editing
+    should_start, updated_params = confirm_bisection_params(
         script_path,
         package,
         good_ref,
@@ -478,9 +478,26 @@ def _run_bisection(
         test_command,
         inverse,
         auto_confirm=yes,
-    ):
+    )
+
+    if not should_start:
         console.print("[yellow]⚠️ Bisection cancelled[/yellow]")
         return
+
+    # Apply any parameter changes from user editing
+    package = str(updated_params["package"])
+    good_ref = str(updated_params["good_ref"])
+    bad_ref = str(updated_params["bad_ref"])
+    repo_url = str(updated_params["repo_url"])
+    test_command = (
+        updated_params["test_command"]
+        if updated_params["test_command"] is None
+        else str(updated_params["test_command"])
+    )
+    inverse = bool(updated_params["inverse"])
+
+    # Re-validate refs if they were changed
+    good_ref, bad_ref = _validate_and_fix_refs(good_ref, bad_ref, inverse)
 
     if dry_run:
         print_summary_table(script_path, package, repo_url, good_ref, bad_ref)

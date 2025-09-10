@@ -7,12 +7,10 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from prompt_toolkit.document import Document
 
     from .issue_importer import CodeBlock
@@ -247,68 +245,6 @@ def prompt_for_repo_url(package: str) -> str:
         except KeyboardInterrupt:
             console.print("\n[yellow]⚠️ Cancelled by user[/yellow]")
             raise SystemExit(130)
-
-
-def confirm_bisection_params(
-    script_path: Path,
-    package: str,
-    good_ref: str,
-    bad_ref: str,
-    repo_url: str,
-    test_command: str | None = None,
-    inverse: bool = False,
-    auto_confirm: bool = False,
-) -> bool:
-    """Show bisection parameters and ask for confirmation.
-
-    Args:
-        script_path: Path to the script
-        package: Package name
-        good_ref: Good git reference
-        bad_ref: Bad git reference
-        repo_url: Repository URL
-        test_command: Custom test command (optional)
-        inverse: Whether this is inverse bisection
-
-    Returns:
-        True if user confirms, False otherwise
-    """
-    console.print("\n[bold blue]🔄 Bisection Summary[/bold blue]")
-
-    table = Table(show_header=False)
-    table.add_column("Parameter", style="cyan", width=20)
-    table.add_column("Value", style="white")
-
-    table.add_row("📄 Script", str(script_path))
-    table.add_row("📦 Package", package)
-    table.add_row("🔗 Repository", repo_url)
-    table.add_row("✅ Good ref", good_ref)
-    table.add_row("❌ Bad ref", bad_ref)
-
-    if test_command:
-        table.add_row("🧪 Test command", test_command)
-    else:
-        table.add_row("🧪 Test command", f"uv run {script_path.name}")
-
-    if inverse:
-        table.add_row("🔄 Mode", "Inverse (find when fixed)")
-    else:
-        table.add_row("🔄 Mode", "Normal (find when broken)")
-
-    console.print(table)
-    console.print()
-
-    if auto_confirm:
-        console.print(
-            "[bold cyan]Start bisection?[/bold cyan] [green]yes[/green] (auto-confirmed)"
-        )
-        return True
-
-    try:
-        return Confirm.ask("[bold cyan]Start bisection?[/bold cyan]", default=True)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]⚠️ Cancelled by user[/yellow]")
-        raise SystemExit(130)
 
 
 def _is_valid_git_ref(ref: str) -> bool:
