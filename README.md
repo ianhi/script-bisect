@@ -49,7 +49,7 @@ Point script-bisect directly at a real GitHub issue:
 
 ```bash
 # Bisect a real xarray issue directly from GitHub
-uvx script-bisect --issue https://github.com/pydata/xarray/issues/10712
+uvx script-bisect https://github.com/pydata/xarray/issues/10712 xarray
 ```
 
 That's it! script-bisect will:
@@ -333,10 +333,6 @@ Cache locations follow XDG Base Directory standards:
 
 ### Roadmap 🗺️
 
-- **GitHub Issue Integration**: Point at a GitHub issue to automatically extract and test script blocks
-  ```bash
-  script-bisect --issue https://github.com/pydata/xarray/issues/1234
-  ```
 - **Multiple Package Bisection**: Bisect multiple related packages simultaneously
 - **PyPI Metadata Lookup**: Automatic repository detection for more packages
 - **Regression Test Suite**: Generate test suites from bisection results

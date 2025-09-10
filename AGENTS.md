@@ -167,7 +167,7 @@ examples/                       # Example PEP 723 scripts for testing
 18. **Enhanced Error Display**: `--full-traceback` for detailed Python error information
 19. **Smart UI Design**: Clean, intuitive interface with Rich markup and keybinding shortcuts
 20. **Repository Mapping**: Curated database of popular Python package repositories
-21. **GitHub Issue Integration**: Direct input via `--issue` flag for automatic script extraction
+21. **GitHub Issue Integration**: Direct GitHub URL input for automatic script extraction
 22. **PyPI Release Automation**: Automated publishing to PyPI on git tags
 23. **CI/CD Integration**: Comprehensive GitHub Actions for testing and release
 24. **Cross-platform**: Works on macOS, Linux, and Windows
@@ -201,7 +201,7 @@ python -m script_bisect.cache_cli clear       # Clear all caches
 python -m script_bisect.cache_cli cleanup     # Clean up old entries
 
 # GitHub Issue Integration
-script-bisect --issue https://github.com/pydata/xarray/issues/10712
+script-bisect https://github.com/pydata/xarray/issues/10712 xarray
 ```
 
 ## Testing Strategy
