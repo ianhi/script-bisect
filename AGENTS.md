@@ -167,8 +167,10 @@ examples/                       # Example PEP 723 scripts for testing
 18. **Enhanced Error Display**: `--full-traceback` for detailed Python error information
 19. **Smart UI Design**: Clean, intuitive interface with Rich markup and keybinding shortcuts
 20. **Repository Mapping**: Curated database of popular Python package repositories
-21. **CI/CD Integration**: GitHub Actions workflow for testing
-22. **Cross-platform**: Works on macOS, Linux, and Windows
+21. **GitHub Issue Integration**: Direct input via `--issue` flag for automatic script extraction
+22. **PyPI Release Automation**: Automated publishing to PyPI on git tags
+23. **CI/CD Integration**: Comprehensive GitHub Actions for testing and release
+24. **Cross-platform**: Works on macOS, Linux, and Windows
 
 ### Usage Patterns
 ```bash
@@ -197,6 +199,9 @@ script-bisect script.py xarray v2024.01.0 main --refresh-cache --keep-clone
 python -m script_bisect.cache_cli stats       # Show cache statistics
 python -m script_bisect.cache_cli clear       # Clear all caches
 python -m script_bisect.cache_cli cleanup     # Clean up old entries
+
+# GitHub Issue Integration
+script-bisect --issue https://github.com/pydata/xarray/issues/10712
 ```
 
 ## Testing Strategy
@@ -286,38 +291,14 @@ script-bisect script.py pandas v1.0.0      # Prompts for bad ref only
 
 ## Planned Future Features
 
-### GitHub Issue Integration (Ambitious Roadmap)
-We've planned a sophisticated feature to extract and test scripts directly from GitHub issues:
+### Future Enhancements
+While GitHub issue integration is already implemented, planned enhancements include:
 
-#### Core Components Needed
-1. **Issue Parser**: Extract code blocks from GitHub issue URLs/comments
-2. **Script Detection**: AI-powered identification of likely test scripts
-3. **Metadata Generation**: Auto-populate PEP 723 metadata when missing
-4. **User Selection**: Interactive selection of correct code blocks
-5. **Script Editor**: Launch external editor (vim) for script refinement
-6. **Dependency Detection**: Automatic dependency discovery and addition
-7. **Smart Testing**: Iterative testing with dependency resolution
-
-#### Technical Challenges
-- **Content Extraction**: Reliable parsing of GitHub's API and HTML
-- **Code Classification**: Distinguishing test scripts from example code
-- **Dependency Resolution**: Smart detection of missing packages
-- **Editor Integration**: Cross-platform external editor support
-- **Error Recovery**: Handling malformed or incomplete scripts
-
-#### Workflow Vision
-```bash
-# Point at GitHub issue
-script-bisect --issue https://github.com/pandas/pandas/issues/12345
-
-# Tool automatically:
-# 1. Fetches issue content
-# 2. Identifies code blocks
-# 3. Prompts user to select correct script
-# 4. Launches editor for refinement
-# 5. Auto-adds missing dependencies
-# 6. Runs bisection
-```
+1. **Multiple Package Bisection**: Bisect multiple related packages simultaneously
+2. **Enhanced Issue Parsing**: Better AI-powered identification of test scripts from issue content
+3. **Regression Test Suite**: Generate test suites from bisection results
+4. **Advanced CI Integration**: More comprehensive GitHub Actions and other CI platform support
+5. **Smart Dependency Resolution**: Automatic dependency discovery and addition for incomplete scripts
 
 ## Development Workflow
 
