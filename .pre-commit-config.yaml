@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -14,7 +14,7 @@ repos:
       - id: check-docstring-first
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.6
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -23,7 +23,7 @@ repos:
         exclude: ^(test_autocorrect\.py|10712.*\.py|zarr_test\.py)$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+    rev: v2.3.1
     hooks:
       - id: mypy
         exclude: ^(test_autocorrect\.py|10712.*\.py|zarr_test\.py)$
@@ -37,21 +37,21 @@ repos:
           - types-requests
 
   - repo: https://github.com/pycqa/bandit
-    rev: 1.7.10
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: ["-c", "pyproject.toml"]
         additional_dependencies: ["bandit[toml]"]
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
+    rev: v2.4.3
     hooks:
       - id: codespell
         additional_dependencies:
           - tomli
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.29.3
+    rev: 0.38.0
     hooks:
       - id: check-github-workflows
 
