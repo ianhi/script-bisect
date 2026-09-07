@@ -96,7 +96,7 @@ import xarray as xr
 import numpy as np
 
 # Your reproducer code here
-data = xr.Dataset({'temp': (['time'], np.random.randn(10))})
+data = xr.Dataset({"temp": (["time"], np.random.randn(10))})
 result = data.some_method()  # This might fail in certain versions
 print("✅ Test passed!")
 ```
