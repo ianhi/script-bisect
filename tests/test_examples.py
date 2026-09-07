@@ -57,17 +57,17 @@ def test_xarray_example_can_run_with_uv():
 
         # Should either succeed or fail cleanly (no syntax errors, import errors, etc.)
         # The actual test result depends on which version of xarray gets resolved
-        assert (
-            result.returncode in (0, 1)
-        ), f"Unexpected return code: {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        assert result.returncode in (0, 1), (
+            f"Unexpected return code: {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        )
 
         # Should produce some output (version information and test results)
         assert len(result.stdout) > 100, "Expected substantial output from the test"
 
         # Should mention xarray version
-        assert (
-            "xarray:" in result.stdout
-        ), "Expected xarray version information in output"
+        assert "xarray:" in result.stdout, (
+            "Expected xarray version information in output"
+        )
 
     except FileNotFoundError:
         # Skip the test if uv is not available
