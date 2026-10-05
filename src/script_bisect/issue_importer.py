@@ -185,7 +185,7 @@ class GitHubIssueImporter:
 
         # Process comments
         for i, comment in enumerate(content.comments):
-            source_desc = f"comment {i+1}"
+            source_desc = f"comment {i + 1}"
             if content.target_comment_id:
                 source_desc += " (targeted)" if i == 0 else ""  # Simplified for now
             comment_blocks = self._extract_blocks_from_text(comment, source_desc)
