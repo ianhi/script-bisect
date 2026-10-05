@@ -636,7 +636,7 @@ def prompt_for_code_block(
                 from rich.syntax import Syntax
 
                 console.print(
-                    f"\n[bold cyan]📄 Block {i+1} from {block.source_location}[/bold cyan]"
+                    f"\n[bold cyan]📄 Block {i + 1} from {block.source_location}[/bold cyan]"
                 )
 
                 # Create syntax highlighted code
