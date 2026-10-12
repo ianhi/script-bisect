@@ -101,12 +101,12 @@ def test_version_comparison():
     ]
 
     for newer, older in newer_cases:
-        assert _looks_like_newer_version(
-            newer, older
-        ), f"{newer} should be newer than {older}"
-        assert not _looks_like_newer_version(
-            older, newer
-        ), f"{older} should not be newer than {newer}"
+        assert _looks_like_newer_version(newer, older), (
+            f"{newer} should be newer than {older}"
+        )
+        assert not _looks_like_newer_version(older, newer), (
+            f"{older} should not be newer than {newer}"
+        )
 
     # Test cases where comparison isn't clear
     unclear_cases = [
@@ -120,9 +120,9 @@ def test_version_comparison():
         result1 = _looks_like_newer_version(ref1, ref2)
         result2 = _looks_like_newer_version(ref2, ref1)
         # At least one should be False since we can't determine order
-        assert not (
-            result1 and result2
-        ), f"Both {ref1} and {ref2} can't be newer than each other"
+        assert not (result1 and result2), (
+            f"Both {ref1} and {ref2} can't be newer than each other"
+        )
 
 
 def test_fuzzy_completion():
@@ -170,6 +170,6 @@ def test_fuzzy_completion():
 
         # Check that all expected matches are found
         for expected in expected_matches:
-            assert (
-                expected in actual_matches
-            ), f"Expected '{expected}' to be in completions for '{test_input}', got {actual_matches}"
+            assert expected in actual_matches, (
+                f"Expected '{expected}' to be in completions for '{test_input}', got {actual_matches}"
+            )
