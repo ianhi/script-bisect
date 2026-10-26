@@ -57,14 +57,14 @@ def test_xarray_bisection_finds_correct_commit():
         )
 
         # Should show success message
-        assert (
-            "✨ Bisection completed successfully!" in result.stdout
-        ), f"Success message not found in output:\n{result.stdout}"
+        assert "✨ Bisection completed successfully!" in result.stdout, (
+            f"Success message not found in output:\n{result.stdout}"
+        )
 
         # Should mention it found the first bad commit
-        assert (
-            "Found first bad commit" in result.stdout
-        ), f"First bad commit message not found in output:\n{result.stdout}"
+        assert "Found first bad commit" in result.stdout, (
+            f"First bad commit message not found in output:\n{result.stdout}"
+        )
 
     except FileNotFoundError:
         pytest.skip("uv not found - skipping integration test")
@@ -118,19 +118,19 @@ def test_automatic_dependency_detection_xarray_10712():
         )
         bisection_completed = "✨ Bisection completed successfully!" in output
 
-        assert (
-            dependency_detected or bisection_completed
-        ), f"Neither dependency detection nor successful completion found in output:\n{output}"
+        assert dependency_detected or bisection_completed, (
+            f"Neither dependency detection nor successful completion found in output:\n{output}"
+        )
 
         # Verify the managed script approach is working
-        assert (
-            "managed_test_xarray_10712.py" in output
-        ), f"Managed script not found in output:\n{output}"
+        assert "managed_test_xarray_10712.py" in output, (
+            f"Managed script not found in output:\n{output}"
+        )
 
         # Should successfully run at least one test after dependency fixing
-        assert any(
-            result in output for result in ["✅ Good", "❌ Bad"]
-        ), f"No successful test results found in output:\n{output}"
+        assert any(result in output for result in ["✅ Good", "❌ Bad"]), (
+            f"No successful test results found in output:\n{output}"
+        )
 
         print("✅ Automatic dependency detection integration test passed!")
 
