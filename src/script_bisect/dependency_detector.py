@@ -244,7 +244,7 @@ class DependencyDetector:
 
         # Add requires-python
         if "requires-python" in metadata:
-            lines.append(f"# requires-python = \"{metadata['requires-python']}\"")
+            lines.append(f'# requires-python = "{metadata["requires-python"]}"')
 
         # Add dependencies
         if "dependencies" in metadata and metadata["dependencies"]:
