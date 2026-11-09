@@ -32,19 +32,19 @@ class TestRepositoryMappings:
         ]
 
         for package in expected_packages:
-            assert (
-                package in COMMON_REPOSITORIES
-            ), f"Package {package} should be in mappings"
+            assert package in COMMON_REPOSITORIES, (
+                f"Package {package} should be in mappings"
+            )
 
     def test_all_urls_are_https_github(self):
         """Test that all repository URLs are HTTPS GitHub URLs."""
         for package, url in COMMON_REPOSITORIES.items():
-            assert url.startswith(
-                "https://github.com/"
-            ), f"URL for {package} should be HTTPS GitHub URL"
-            assert (
-                url.count("/") >= 4
-            ), f"URL for {package} should include owner/repo path"
+            assert url.startswith("https://github.com/"), (
+                f"URL for {package} should be HTTPS GitHub URL"
+            )
+            assert url.count("/") >= 4, (
+                f"URL for {package} should include owner/repo path"
+            )
 
     def test_get_repository_url_existing(self):
         """Test getting repository URL for existing packages."""
@@ -130,9 +130,9 @@ class TestRepositoryMappings:
         ]
 
         for package in core_packages:
-            assert has_repository(
-                package
-            ), f"Core package {package} should have repository mapping"
+            assert has_repository(package), (
+                f"Core package {package} should have repository mapping"
+            )
             url = get_repository_url(package)
             assert url is not None
             assert "github.com" in url
@@ -142,9 +142,9 @@ class TestRepositoryMappings:
         web_packages = ["django", "flask", "fastapi", "requests", "httpx", "aiohttp"]
 
         for package in web_packages:
-            assert has_repository(
-                package
-            ), f"Web package {package} should have repository mapping"
+            assert has_repository(package), (
+                f"Web package {package} should have repository mapping"
+            )
             url = get_repository_url(package)
             assert url is not None
             assert "github.com" in url
@@ -154,9 +154,9 @@ class TestRepositoryMappings:
         dev_packages = ["pytest", "mypy", "ruff", "rich", "click"]
 
         for package in dev_packages:
-            assert has_repository(
-                package
-            ), f"Dev package {package} should have repository mapping"
+            assert has_repository(package), (
+                f"Dev package {package} should have repository mapping"
+            )
             url = get_repository_url(package)
             assert url is not None
             assert "github.com" in url
@@ -218,15 +218,15 @@ class TestRepositoryMappings:
 
             # Should have owner/repo format
             path_parts = url.replace("https://github.com/", "").split("/")
-            assert (
-                len(path_parts) >= 2
-            ), f"URL for {package} should have owner/repo format"
+            assert len(path_parts) >= 2, (
+                f"URL for {package} should have owner/repo format"
+            )
 
             owner, repo = path_parts[0], path_parts[1]
             assert owner, f"Owner should not be empty for {package}"
             assert repo, f"Repo should not be empty for {package}"
 
             # Should not have trailing slash
-            assert not url.endswith(
-                "/"
-            ), f"URL for {package} should not have trailing slash"
+            assert not url.endswith("/"), (
+                f"URL for {package} should not have trailing slash"
+            )
