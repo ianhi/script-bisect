@@ -56,9 +56,9 @@ class TestDependencyMappings:
         ]
 
         for module in expected_stdlib:
-            assert (
-                module in STANDARD_LIBRARY
-            ), f"Module {module} should be in standard library"
+            assert module in STANDARD_LIBRARY, (
+                f"Module {module} should be in standard library"
+            )
 
     def test_get_package_name_existing_mappings(self):
         """Test getting package names for existing import mappings."""
@@ -255,9 +255,9 @@ class TestDependencyMappings:
         }
 
         for module in expected_stdlib:
-            assert (
-                module in STANDARD_LIBRARY
-            ), f"Standard library should include {module}"
+            assert module in STANDARD_LIBRARY, (
+                f"Standard library should include {module}"
+            )
 
     def test_standard_library_no_third_party(self):
         """Test that standard library set doesn't include third-party packages."""
@@ -279,9 +279,9 @@ class TestDependencyMappings:
         }
 
         for package in third_party_packages:
-            assert (
-                package not in STANDARD_LIBRARY
-            ), f"Standard library should not include third-party package {package}"
+            assert package not in STANDARD_LIBRARY, (
+                f"Standard library should not include third-party package {package}"
+            )
 
     def test_case_sensitivity(self):
         """Test that import name lookups are case sensitive."""
@@ -302,9 +302,9 @@ class TestDependencyMappings:
             assert package_name, f"Package name for {import_name} should not be empty"
 
             # Package name should not contain spaces (PyPI constraint)
-            assert (
-                " " not in package_name
-            ), f"Package name {package_name} should not contain spaces"
+            assert " " not in package_name, (
+                f"Package name {package_name} should not contain spaces"
+            )
 
             # Import name should not be empty
             assert import_name, "Import name should not be empty"
